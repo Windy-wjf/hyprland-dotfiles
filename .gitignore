@@ -1,0 +1,9 @@
+# Python artifacts (the bar scripts may be run in place)
+__pycache__/
+*.py[cod]
+
+# Editor / OS noise and local backups
+*.bak
+*.tmp
+*~
+.DS_Store

@@ -1,0 +1,8 @@
+#!/bin/bash
+# 打开资源监视器：优先 Mission Center，其次 GNOME 系统监视器
+# 已在运行时再次启动会通过 GApplication 激活已有窗口，不会开第二个进程
+if command -v missioncenter >/dev/null 2>&1; then
+    setsid missioncenter >/dev/null 2>&1 &
+else
+    setsid gnome-system-monitor >/dev/null 2>&1 &
+fi

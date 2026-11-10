@@ -1,0 +1,297 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 38,
+  "spacing": 0,
+  "margin-top": 0,
+  "margin-left": 0,
+  "margin-right": 0,
+  "margin-bottom": 0,
+  "exclusive": true,
+  "modules-left": [
+    "custom/archmenu",
+    "hyprland/window"
+  ],
+  "modules-center": [
+    "custom/weather",
+    "custom/app-qq",
+    "custom/app-wechat",
+    "custom/app-firefox",
+    "custom/app-org-gnome-nautilus",
+    "custom/app-com-follow-clash",
+    "custom/app-add",
+    "custom/app-del",
+    "custom/ws1",
+    "custom/ws2",
+    "custom/ws3",
+    "custom/ws4",
+    "custom/ws5",
+    "custom/ws6",
+    "custom/ws7",
+    "custom/ws8",
+    "custom/ws9",
+    "custom/ws10",
+    "custom/wsadd"
+  ],
+  "modules-right": [
+    "network",
+    "memory",
+    "custom/vram",
+    "custom/cpu",
+    "battery",
+    "pulseaudio",
+    "custom/brightness",
+    "custom/traybell",
+    "tray",
+    "custom/clock"
+  ],
+  "hyprland/window": {
+    "format": "{title}",
+    "max-length": 30,
+    "separate-outputs": true,
+    "rewrite": {
+      "": "Desktop"
+    }
+  },
+  "network": {
+    "interval": 3,
+    "format-wifi": "  {essid}",
+    "format-ethernet": "  {ifname}",
+    "format-disconnected": "  offline",
+    "tooltip-format-wifi": "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}",
+    "tooltip-format-ethernet": "{ifname}\n{ipaddr}/{cidr}",
+    "tooltip-format-disconnected": "Disconnected",
+    "on-click": "python3 $HOME/.config/waybar/popup.py network",
+    "on-click-right": "python3 $HOME/.config/waybar/popup.py network"
+  },
+  "memory": {
+    "interval": 3,
+    "format": " {percentage}%",
+    "tooltip-format": "内存占用：{percentage}%\n已用：{used:0.1f} GiB / 共 {total:0.1f} GiB\n可用：{avail:0.1f} GiB",
+    "on-click": "bash $HOME/.config/waybar/sysmon"
+  },
+  "custom/vram": {
+    "exec": "python3 $HOME/.config/waybar/vram",
+    "interval": 3,
+    "return-type": "json",
+    "tooltip": true,
+    "format": "󰢮 {text}",
+    "on-click": "bash $HOME/.config/waybar/sysmon"
+  },
+  "battery": {
+    "interval": 30,
+    "states": {
+      "warning": 30,
+      "critical": 15
+    },
+    "format": "{icon} {capacity}%",
+    "format-charging": "{icon} {capacity}%",
+    "format-plugged": "{icon} {capacity}%",
+    "format-icons": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "tooltip-format": "{timeTo}"
+  },
+  "pulseaudio": {
+    "interval": 1,
+    "format": "{icon} {volume}%",
+    "format-muted": " muted",
+    "format-icons": {
+      "default": [
+        "",
+        "",
+        ""
+      ]
+    },
+    "tooltip-format": "{desc}",
+    "on-click": "python3 $HOME/.config/waybar/popup.py volume",
+    "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+  },
+  "custom/cpu": {
+    "exec": "python3 $HOME/.config/waybar/cpu",
+    "interval": 2,
+    "return-type": "json",
+    "tooltip": true,
+    "format": "  {text}",
+    "on-click": "bash $HOME/.config/waybar/sysmon"
+  },
+  "custom/weather": {
+    "exec": "python3 $HOME/.config/waybar/weather",
+    "interval": 600,
+    "return-type": "json",
+    "tooltip": true,
+    "format": "{text}",
+    "on-click": "setsid -f firefox https://wttr.in/Shanghai"
+  },
+  "custom/traybell": {
+    "exec": "bash $HOME/.config/waybar/traybell",
+    "interval": 1.0,
+    "return-type": "json",
+    "tooltip": false,
+    "format": "{text}"
+  },
+  "tray": {
+    "icon-size": 16,
+    "spacing": 8,
+    "show-passive-items": true
+  },
+  "custom/archmenu": {
+    "format": "",
+    "tooltip": false,
+    "on-click": "bash $HOME/.config/waybar/archmenu"
+  },
+  "custom/brightness": {
+    "exec": "cat $HOME/.cache/waybar-brightness 2>/dev/null || echo 68",
+    "interval": 5,
+    "format": " {text}%",
+    "tooltip": false,
+    "on-click": "python3 $HOME/.config/waybar/popup.py brightness"
+  },
+  "custom/clock": {
+    "exec": "bash $HOME/.config/waybar/clock",
+    "interval": 1,
+    "format": "{text}",
+    "tooltip": false,
+    "on-click": "python3 $HOME/.config/waybar/popup.py calendar"
+  },
+  "custom/ws1": {
+    "exec": "cat $XDG_RUNTIME_DIR/waybar-ws/1.json",
+    "interval": 1.0,
+    "return-type": "json",
+    "tooltip": false,
+    "format": "{text}",
+    "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 1 })'",
+    "on-click-right": "python3 $HOME/.config/waybar/wsdel 1"
+  },
+  "custom/ws2": {
+    "exec": "cat $XDG_RUNTIME_DIR/waybar-ws/2.json",
+    "interval": 1.0,
+    "return-type": "json",
+    "tooltip": false,
+    "format": "{text}",
+    "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'",
+    "on-click-right": "python3 $HOME/.config/waybar/wsdel 2"
+  },
+  "custom/ws3": {
+    "exec": "cat $XDG_RUNTIME_DIR/waybar-ws/3.json",
+    "interval": 1.0,
+    "return-type": "json",
+    "tooltip": false,
+    "format": "{text}",
+    "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 3 })'",
+    "on-click-right": "python3 $HOME/.config/waybar/wsdel 3"
+  },
+  "custom/ws4": {
+    "exec": "cat $XDG_RUNTIME_DIR/waybar-ws/4.json",
+    "interval": 1.0,
+    "return-type": "json",
+    "tooltip": false,
+    "format": "{text}",
+    "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 4 })'",
+    "on-click-right": "python3 $HOME/.config/waybar/wsdel 4"
+  },
+  "custom/ws5": {
+    "exec": "cat $XDG_RUNTIME_DIR/waybar-ws/5.json",
+    "interval": 1.0,
+    "return-type": "json",
+    "tooltip": false,
+    "format": "{text}",
+    "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 5 })'",
+    "on-click-right": "python3 $HOME/.config/waybar/wsdel 5"
+  },
+  "custom/ws6": {
+    "exec": "cat $XDG_RUNTIME_DIR/waybar-ws/6.json",
+    "interval": 1.0,
+    "return-type": "json",
+    "tooltip": false,
+    "format": "{text}",
+    "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 6 })'",
+    "on-click-right": "python3 $HOME/.config/waybar/wsdel 6"
+  },
+  "custom/ws7": {
+    "exec": "cat $XDG_RUNTIME_DIR/waybar-ws/7.json",
+    "interval": 1.0,
+    "return-type": "json",
+    "tooltip": false,
+    "format": "{text}",
+    "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 7 })'",
+    "on-click-right": "python3 $HOME/.config/waybar/wsdel 7"
+  },
+  "custom/ws8": {
+    "exec": "cat $XDG_RUNTIME_DIR/waybar-ws/8.json",
+    "interval": 1.0,
+    "return-type": "json",
+    "tooltip": false,
+    "format": "{text}",
+    "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 8 })'",
+    "on-click-right": "python3 $HOME/.config/waybar/wsdel 8"
+  },
+  "custom/ws9": {
+    "exec": "cat $XDG_RUNTIME_DIR/waybar-ws/9.json",
+    "interval": 1.0,
+    "return-type": "json",
+    "tooltip": false,
+    "format": "{text}",
+    "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 9 })'",
+    "on-click-right": "python3 $HOME/.config/waybar/wsdel 9"
+  },
+  "custom/ws10": {
+    "exec": "cat $XDG_RUNTIME_DIR/waybar-ws/10.json",
+    "interval": 1.0,
+    "return-type": "json",
+    "tooltip": false,
+    "format": "{text}",
+    "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 10 })'",
+    "on-click-right": "python3 $HOME/.config/waybar/wsdel 10"
+  },
+  "custom/wsadd": {
+    "format": "+",
+    "tooltip": false,
+    "on-click": "python3 $HOME/.config/waybar/wsadd"
+  },
+  "custom/app-add": {
+    "format": "+",
+    "tooltip": false,
+    "on-click": "python3 $HOME/.config/waybar/appadd"
+  },
+  "custom/app-del": {
+    "format": "−",
+    "tooltip": false,
+    "on-click": "python3 $HOME/.config/waybar/appdel"
+  },
+  "custom/app-qq": {
+    "format": "",
+    "tooltip": false,
+    "on-click": "setsid -f /usr/bin/linuxqq",
+    "on-click-right": "python3 $HOME/.config/waybar/appdel qq"
+  },
+  "custom/app-wechat": {
+    "format": "",
+    "tooltip": false,
+    "on-click": "setsid -f /opt/wechat/wechat",
+    "on-click-right": "python3 $HOME/.config/waybar/appdel wechat"
+  },
+  "custom/app-firefox": {
+    "format": "",
+    "tooltip": false,
+    "on-click": "setsid -f firefox",
+    "on-click-right": "python3 $HOME/.config/waybar/appdel firefox"
+  },
+  "custom/app-org-gnome-nautilus": {
+    "format": "",
+    "tooltip": false,
+    "on-click": "setsid -f nautilus --new-window",
+    "on-click-right": "python3 $HOME/.config/waybar/appdel org-gnome-nautilus"
+  },
+  "custom/app-com-follow-clash": {
+    "format": "",
+    "tooltip": false,
+    "on-click": "setsid -f flclash",
+    "on-click-right": "python3 $HOME/.config/waybar/appdel com-follow-clash"
+  }
+}

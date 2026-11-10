@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""CPU 占用 / 频率 / 温度，输出 waybar custom module 的 JSON。
+内置 cpu 模块没有 tooltip-format，所以自己算 /proc/stat。"""
+import glob
+import json
+import os
+
+CACHE = os.path.expanduser("~/.cache/waybar-cpu-stat")
+
+
+def read_stat():
+    out = {}
+    try:
+        with open("/proc/stat") as f:
+            for line in f:
+                if not line.startswith("cpu"):
+                    break
+                parts = line.split()
+                nums = [int(x) for x in parts[1:]]
+                idle = nums[3] + (nums[4] if len(nums) > 4 else 0)
+                out[parts[0]] = [sum(nums), idle]
+    except (OSError, ValueError):
+        pass
+    return out
+
+
+def pct(prev, cur):
+    dt = cur[0] - prev[0]
+    di = cur[1] - prev[1]
+    if dt <= 0:
+        return 0.0
+    return max(0.0, min(100.0, (1.0 - di / dt) * 100.0))
+
+
+cur = read_stat()
+prev = {}
+try:
+    with open(CACHE) as f:
+        prev = json.load(f)
+except (OSError, ValueError):
+    pass
+
+total = pct(prev.get("cpu", [0, 0]), cur.get("cpu", [0, 0])) if prev else 0.0
+cores = []
+for i in range(1, 4096):
+    key = "cpu%d" % i
+    if key not in cur:
+        break
+    if key in prev:
+        cores.append(int(round(pct(prev[key], cur[key]))))
+
+try:
+    with open(CACHE, "w") as f:
+        json.dump(cur, f)
+except OSError:
+    pass
+
+# 频率（kHz）
+freqs = []
+for path in glob.glob("/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq"):
+    try:
+        with open(path) as f:
+            freqs.append(int(f.read().strip()) / 1e6)
+    except (OSError, ValueError):
+        pass
+avg_f = sum(freqs) / len(freqs) if freqs else 0.0
+max_f = max(freqs) if freqs else 0.0
+
+# 温度
+temp = None
+for hw in glob.glob("/sys/class/hwmon/hwmon*"):
+    try:
+        with open(os.path.join(hw, "name")) as f:
+            if f.read().strip() not in ("k10temp", "zenpower", "coretemp"):
+                continue
+        with open(os.path.join(hw, "temp1_input")) as f:
+            temp = int(f.read().strip()) / 1000.0
+        break
+    except (OSError, ValueError):
+        continue
+
+p = int(round(total))
+lines = ["CPU 占用：%d%%" % p]
+if freqs:
+    lines.append("频率：%.2f GHz（平均） · %.2f GHz（最高）" % (avg_f, max_f))
+if temp is not None:
+    lines.append("温度：%.0f °C" % temp)
+if cores:
+    lines.append("各核心：%s %%" % " ".join(str(c) for c in cores))
+
+cls = "critical" if p >= 90 else ("warning" if p >= 80 else "")
+print(json.dumps({"text": "%d%%" % p, "tooltip": "\n".join(lines), "class": cls},
+                 ensure_ascii=False))

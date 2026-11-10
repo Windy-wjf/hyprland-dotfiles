@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# macOS-style "Arch menu" — click the Arch logo at the top-left of the waybar.
+set -u
+H="${HOME:?HOME must be set}"
+FZ="$H/.config/fuzzel/fuzzel.ini"
+
+# Toggle: clicking the Arch logo again closes an already-open menu.
+if pgrep -x fuzzel >/dev/null 2>&1; then
+  pkill -x fuzzel
+  exit 0
+fi
+
+MENU=(
+  "Applications"
+  "System Settings"
+  "────────────"
+  "Sleep"
+  "Restart"
+  "Shut Down"
+  "────────────"
+  "Lock"
+  "Log Out"
+)
+
+sel="$(printf '%s\n' "${MENU[@]}" | fuzzel --config "$FZ" --dmenu \
+  --anchor=top-left --x-margin=4 --y-margin=4 \
+  --width=22 --lines=9 --minimal-lines --hide-prompt 2>/dev/null)" || exit 0
+
+bg() { "$@" >/dev/null 2>&1 & }
+
+case "$sel" in
+  "Applications")    bg fuzzel --config "$FZ" ;;
+  "System Settings") bg gnome-control-center ;;
+  "Sleep")           bg systemctl suspend ;;
+  "Restart")         bg systemctl reboot ;;
+  "Shut Down")       bg systemctl poweroff ;;
+  "Lock")
+    if   command -v hyprlock >/dev/null 2>&1; then bg hyprlock
+    elif command -v swaylock >/dev/null 2>&1; then bg swaylock
+    else bg loginctl lock-session; fi ;;
+  "Log Out")         bg hyprctl dispatch exit ;;
+esac

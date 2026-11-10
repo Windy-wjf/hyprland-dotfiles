@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""新建工作区：跳到 1~10 中最小的空闲编号（Hyprland 聚焦即创建）。"""
+import json
+import subprocess
+
+MAX = 10
+
+
+def hyprctl(args):
+    r = subprocess.run(["hyprctl", "-j"] + args, capture_output=True, text=True, timeout=3)
+    return json.loads(r.stdout) if r.stdout.strip() else None
+
+
+wss = hyprctl(["workspaces"]) or []
+used = {w["id"] for w in wss if isinstance(w, dict) and w.get("id", 0) > 0}
+# 取 1~10 中最小的空闲编号，保持编号紧凑；工作区已持久化，不会因离开被回收
+free = next((i for i in range(1, MAX + 1) if i not in used), None)
+if free is None:
+    raise SystemExit(0)
+# 先建持久化规则，聚焦后工作区即使为空也不会被回收
+subprocess.run(
+    ["hyprctl", "dispatch", 'function() hl.workspace_rule({ workspace = "%d", persistent = true }) end' % free],
+    capture_output=True,
+)
+subprocess.run(
+    ["hyprctl", "dispatch", "hl.dsp.focus({ workspace = %d })" % free],
+    capture_output=True,
+)

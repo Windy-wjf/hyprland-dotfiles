@@ -1,0 +1,28 @@
+#!/bin/bash
+# 托盘图标进入 NeedsAttention（有新消息）时，在状态栏闪烁铃铛
+ITEMS=$(gdbus call --session --dest org.kde.StatusNotifierWatcher \
+  --object-path /StatusNotifierWatcher \
+  --method org.freedesktop.DBus.Properties.Get \
+  org.kde.StatusNotifierWatcher RegisteredStatusNotifierItems 2>/dev/null)
+
+need=0
+for p in $(echo "$ITEMS" | grep -oE ':[0-9]+\.[0-9]+/[A-Za-z0-9_/]+'); do
+  bus=${p%%/*}
+  path=/${p#*/}
+  st=$(gdbus call --session --dest "$bus" --object-path "$path" \
+       --method org.freedesktop.DBus.Properties.Get \
+       org.kde.StatusNotifierItem Status 2>/dev/null)
+  case "$st" in
+    *NeedsAttention*) need=1; break ;;
+  esac
+done
+
+[ "$need" = 1 ] || exit 0
+
+# 交替输出 on/off 两个 class 来制造闪烁（GTK3 CSS 不支持动画）
+if [ $(( $(date +%N) / 500000000 )) -eq 0 ]; then
+  cls=on
+else
+  cls=off
+fi
+printf '{"text":"\uf0f3","class":"%s"}\n' "$cls"

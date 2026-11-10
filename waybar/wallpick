@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""用 fuzzel 选择一张图片作为壁纸：立即生效并写回 hyprpaper.conf。
+
+用法：wallpick          # 弹出图片列表
+      wallpick <路径>   # 直接设置指定图片
+"""
+import glob
+import os
+import re
+import subprocess
+import sys
+
+PIC_DIR = os.path.expanduser("~/Pictures")
+CONF = os.path.expanduser("~/.config/hypr/hyprpaper.conf")
+EXTS = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
+MONITOR = "DP-1"
+FIT_MODE = "fill"
+
+
+def hypr_env():
+    """保证 hyprctl 能找到正在运行的 Hyprland 实例。"""
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        return os.environ.copy()
+    runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    env = os.environ.copy()
+    for d in sorted(glob.glob(os.path.join(runtime, "hypr", "*")), reverse=True):
+        cand = os.path.basename(d)
+        env["HYPRLAND_INSTANCE_SIGNATURE"] = cand
+        if subprocess.run(["hyprctl", "-j", "version"], env=env,
+                          capture_output=True).returncode == 0:
+            return env
+    return os.environ.copy()
+
+
+ENV = hypr_env()
+
+
+def read_conf():
+    with open(CONF, encoding="utf-8") as f:
+        return f.read()
+
+
+def current_wallpaper(text):
+    m = re.search(r"^[ \t]*path[ \t]*=[ \t]*(.+?)[ \t]*$", text, re.M)
+    return m.group(1) if m else ""
+
+
+def write_conf(text, new_path):
+    new_text, n = re.subn(
+        r"^([ \t]*path[ \t]*=[ \t]*)(.+?)([ \t]*)$",
+        lambda m: m.group(1) + new_path + m.group(3),
+        text, count=1, flags=re.M)
+    if n == 0:
+        new_text = text.rstrip() + f"\n\nwallpaper {{\n    monitor  = {MONITOR}\n    path     = {new_path}\n    fit_mode = {FIT_MODE}\n}}\n"
+    with open(CONF, "w", encoding="utf-8") as f:
+        f.write(new_text)
+
+
+def apply(path):
+    fit = FIT_MODE
+    m = re.search(r"^[ \t]*fit_mode[ \t]*=[ \t]*(\S+)", read_conf(), re.M)
+    if m:
+        fit = m.group(1)
+    subprocess.run(["hyprctl", "hyprpaper", "wallpaper",
+                    f"{MONITOR},{path},{fit}"], env=ENV, check=False)
+
+
+def list_images():
+    out = []
+    for root, dirs, files in os.walk(PIC_DIR):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for fn in files:
+            if fn.lower().endswith(EXTS):
+                out.append(os.path.join(root, fn))
+    out.sort(key=lambda p: (os.path.relpath(p, PIC_DIR).lower()))
+    return out
+
+
+def pick(images, cur):
+    labels = [os.path.relpath(p, PIC_DIR) for p in images]
+    cmd = ["fuzzel", "--dmenu", "--index", "--prompt", "壁纸", "--lines", "14",
+           "--width", "52", "--mesg", f"当前：{os.path.relpath(cur, PIC_DIR) if cur else '无'}"]
+    try:
+        cur_idx = [os.path.abspath(p) for p in images].index(os.path.abspath(cur))
+        cmd.append(f"--select-index={cur_idx}")
+    except ValueError:
+        pass
+    res = subprocess.run(cmd, input="\n".join(labels) + "\n",
+                         capture_output=True, text=True, env=ENV)
+    if res.returncode != 0:
+        return None
+    try:
+        idx = int(res.stdout.strip())
+    except ValueError:
+        return None
+    if 0 <= idx < len(images):
+        return images[idx]
+    return None
+
+
+def main():
+    text = read_conf()
+    cur = current_wallpaper(text)
+
+    if len(sys.argv) == 2:
+        target = os.path.abspath(os.path.expanduser(sys.argv[1]))
+    else:
+        images = list_images()
+        if not images:
+            print(f"{PIC_DIR} 里没有图片")
+            return 1
+        target = pick(images, cur)
+        if not target:
+            return 0
+    if not os.path.isfile(target):
+        print(f"找不到文件：{target}")
+        return 1
+
+    apply(target)
+    write_conf(text, target)
+    print(f"壁纸已切换：{target}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

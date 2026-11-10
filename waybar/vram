@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""输出独立显卡显存占用（waybar custom module 的 JSON 格式）。"""
+import glob
+import json
+import os
+
+best = None
+for total_path in glob.glob("/sys/class/drm/card*/device/mem_info_vram_total"):
+    try:
+        with open(total_path) as f:
+            total = int(f.read().strip())
+    except (OSError, ValueError):
+        continue
+    if total <= 0:
+        continue
+    if best is None or total > best[1]:
+        best = (os.path.dirname(total_path), total)
+
+if best is None:
+    print(json.dumps({"text": "0%", "tooltip": "未检测到独立显卡"}))
+    raise SystemExit(0)
+
+dev, total = best
+try:
+    with open(os.path.join(dev, "mem_info_vram_used")) as f:
+        used = int(f.read().strip() or 0)
+except (OSError, ValueError):
+    used = 0
+
+pct = int(round(used * 100.0 / total))
+gib = 1024.0 ** 3
+driver = "amdgpu"
+try:
+    with open(os.path.join(dev, "uevent")) as f:
+        for line in f:
+            if line.startswith("DRIVER="):
+                driver = line.strip().split("=", 1)[1]
+                break
+except OSError:
+    pass
+
+tooltip = "显存：%.1f GiB / %.1f GiB（%d%%）\n驱动：%s" % (used / gib, total / gib, pct, driver)
+print(json.dumps({"text": "%d%%" % pct, "tooltip": tooltip}, ensure_ascii=False))

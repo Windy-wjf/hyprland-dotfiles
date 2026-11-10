@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""根据 apps.json 重新生成 waybar 的应用快捷图标模块与对应 CSS，然后重启 waybar。
+
+用法：appsync            # 同步并重启
+      appsync --no-restart
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+
+H = os.path.expanduser("~/.config/waybar")
+REG = os.path.join(H, "apps.json")
+CFG = os.path.join(H, "config.jsonc")
+CSS = os.path.join(H, "style.css")
+
+CSS_START = "/* ==== apps:auto:start ==== */"
+CSS_END = "/* ==== apps:auto:end ==== */"
+
+ADD_MOD = "custom/app-add"
+DEL_MOD = "custom/app-del"
+
+
+def load_apps():
+    with open(REG, encoding="utf-8") as f:
+        return json.load(f)["apps"]
+
+
+def module_for(app):
+    glyph = chr(int(app["icon"], 16))
+    return {
+        "format": glyph,
+        "tooltip": False,
+        "on-click": app["exec"],
+        "on-click-right": f"python3 {H}/appdel {app['id']}",
+    }
+
+
+def sync_config(apps):
+    with open(CFG, encoding="utf-8") as f:
+        cfg = json.load(f)
+
+    app_mods = [f"custom/app-{a['id']}" for a in apps] + [ADD_MOD, DEL_MOD]
+
+    # 清掉旧的 app 模块定义（含 app-add）
+    for key in [k for k in cfg if k.startswith("custom/app")]:
+        del cfg[key]
+
+    # 把 app 模块放回它们原来的位置，保留其前后的其它模块（如天气）
+    current = cfg.get("modules-center", [])
+    is_app = lambda m: m in (ADD_MOD, DEL_MOD) or m.startswith("custom/app-")
+    others = [m for m in current if not is_app(m)]
+    idx = 0
+    for m in current:
+        if is_app(m):
+            break
+        idx += 1
+    cfg["modules-center"] = others[:idx] + app_mods + others[idx:]
+
+    cfg[ADD_MOD] = {
+        "format": "+",
+        "tooltip": False,
+        "on-click": f"python3 {H}/appadd",
+    }
+    cfg[DEL_MOD] = {
+        "format": "\u2212",
+        "tooltip": False,
+        "on-click": f"python3 {H}/appdel",
+    }
+    for app in apps:
+        cfg[f"custom/app-{app['id']}"] = module_for(app)
+
+    with open(CFG, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
+def sync_css(apps):
+    ids = [f"#custom-app-{a['id']}" for a in apps]
+    all_ids = ids + [f"#{ADD_MOD.replace('/', '-')}", f"#{DEL_MOD.replace('/', '-')}"]
+    joined = ",\n".join(all_ids)
+    hover_ids = ",\n".join(f"{i}:hover" for i in all_ids)
+
+    block = f"""{CSS_START}
+{joined} {{
+  background: rgba(255, 255, 255, 0.08);
+  color: #c8c8d2;
+  font-size: 15px;
+  padding: 0 10px;
+  margin: 4px 0;
+}}
+
+{ids[0]} {{
+  border-radius: 9px 0 0 9px;
+  margin-left: 5px;
+}}
+
+{all_ids[-1]} {{
+  border-radius: 0 9px 9px 0;
+  margin-right: 5px;
+}}
+
+{hover_ids} {{
+  color: #21ccff;
+}}
+{CSS_END}
+"""
+
+    with open(CSS, encoding="utf-8") as f:
+        css = f.read()
+
+    pat = re.compile(re.escape(CSS_START) + r".*?" + re.escape(CSS_END) + r"\n?", re.S)
+    if pat.search(css):
+        css = pat.sub(block, css)
+    else:
+        css = css.rstrip() + "\n\n" + block
+
+    with open(CSS, "w", encoding="utf-8") as f:
+        f.write(css)
+
+
+def restart_waybar():
+    # 先派出一个脱离当前会话的小进程：等旧实例真正退出后再拉起新实例
+    waiter = (
+        "for i in $(seq 1 40); do "
+        "pgrep -x waybar >/dev/null || exec waybar; "
+        "sleep 0.1; "
+        "done; exec waybar"
+    )
+    subprocess.Popen(
+        ["setsid", "-f", "sh", "-c", waiter],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    subprocess.run(["pkill", "-x", "waybar"], check=False)
+
+
+def main():
+    apps = load_apps()
+    sync_config(apps)
+    sync_css(apps)
+    print(f"已同步 {len(apps)} 个应用图标")
+    if "--no-restart" not in sys.argv:
+        restart_waybar()
+
+
+if __name__ == "__main__":
+    main()

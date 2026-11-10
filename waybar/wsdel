@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+"""删除工作区：取消持久规则并让空工作区回收（有窗口时拒绝）。"""
+import json
+import subprocess
+import sys
+
+
+def hyprctl(args):
+    r = subprocess.run(["hyprctl", "-j"] + args, capture_output=True, text=True, timeout=3)
+    return json.loads(r.stdout) if r.stdout.strip() else None
+
+
+i = int(sys.argv[1])
+wss = hyprctl(["workspaces"]) or []
+mine = next((w for w in wss if w.get("id") == i), None)
+
+if mine is None:
+    # 工作区已不存在，顺手清掉可能残留的规则
+    subprocess.run(
+        ["hyprctl", "dispatch", 'function() hl.workspace_rule({ workspace = "%d", persistent = false }) end' % i],
+        capture_output=True,
+    )
+    raise SystemExit(0)
+
+if mine.get("windows", 0) > 0:
+    raise SystemExit(1)
+
+act = (hyprctl(["activeworkspace"]) or {}).get("id")
+if act == i:
+    other = next((w["id"] for w in wss if w.get("id") != i and w.get("id", 0) > 0), 1)
+    subprocess.run(["hyprctl", "dispatch", "hl.dsp.focus({ workspace = %d })" % other], capture_output=True)
+
+subprocess.run(
+    ["hyprctl", "dispatch", 'function() hl.workspace_rule({ workspace = "%d", persistent = false }) end' % i],
+    capture_output=True,
+)

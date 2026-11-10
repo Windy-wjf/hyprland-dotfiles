@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# 状态栏时钟：中文星期（waybar 自带 clock 的 %A 走 fmt 的 C locale，始终英文）
+printf '\uf017  %s' "$(date '+%Y-%m-%d %A %H:%M')"

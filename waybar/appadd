@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+"""通过 fuzzel 选择应用 + 图标，把快捷图标加到 waybar 应用组里。
+
+流程：选应用 → 选图标（或自定义 U+XXXX）→ 写入 apps.json → 调用 appsync 重建配置。
+"""
+import glob
+import json
+import os
+import re
+import subprocess
+import sys
+
+H = os.path.expanduser("~/.config/waybar")
+REG = os.path.join(H, "apps.json")
+
+DESKTOP_DIRS = [
+    "/usr/share/applications",
+    "/usr/local/share/applications",
+    os.path.expanduser("~/.local/share/applications"),
+    "/var/lib/flatpak/exports/share/applications",
+    os.path.expanduser("~/.local/share/flatpak/exports/share/applications"),
+]
+
+# 常用 Nerd Font 图标（十六进制码位）
+ICONS = [
+    ("f120", "终端"), ("f0ac", "浏览器"), ("f269", "Firefox"), ("f268", "Chrome"),
+    ("f1d6", "QQ"), ("f1d7", "微信"), ("f2c6", "Telegram"), ("f232", "WhatsApp"),
+    ("f198", "Slack"), ("f392", "Discord"), ("f086", "聊天"), ("f0e0", "邮件"),
+    ("f001", "音乐"), ("f008", "视频"), ("f03d", "摄像"), ("f03e", "图片"),
+    ("f07b", "文件夹"), ("f15c", "文档"), ("f1c5", "软件包"), ("f121", "代码"),
+    ("f11b", "游戏"), ("f1b6", "Steam"), ("f1ec", "计算器"), ("f073", "日历"),
+    ("f017", "时钟"), ("f013", "设置"), ("f0c2", "云盘"), ("f019", "下载"),
+    ("f02d", "阅读"), ("f0f3", "通知"), ("f1e0", "插件"), ("f0eb", "其它"),
+]
+
+
+def fuzzel(prompt, lines, extra=None):
+    args = ["fuzzel", "--dmenu", "--prompt", prompt, "--lines", "18", "--width", "46"]
+    if extra:
+        args += extra
+    p = subprocess.run(args, input="\n".join(lines), text=True, capture_output=True)
+    if p.returncode != 0:
+        return None
+    return p.stdout.strip()
+
+
+def read_desktop(path):
+    d = {}
+    in_main = False
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                line = raw.strip()
+                if line.startswith("["):
+                    in_main = line == "[Desktop Entry]"
+                    continue
+                if not in_main or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                d.setdefault(k, v)
+    except OSError:
+        return None
+    if d.get("Type") != "Application":
+        return None
+    if d.get("NoDisplay", "").lower() == "true" or d.get("Hidden", "").lower() == "true":
+        return None
+    if not d.get("Exec") or not d.get("Name"):
+        return None
+    d["_path"] = path
+    d["_id"] = os.path.basename(path)[:-len(".desktop")]
+    return d
+
+
+def all_apps(seen_names=None):
+    out = []
+    names = set()
+    for ddir in DESKTOP_DIRS:
+        for path in sorted(glob.glob(os.path.join(ddir, "*.desktop"))):
+            d = read_desktop(path)
+            if not d:
+                continue
+            name = d["Name"]
+            if name in names:      # 同名应用只保留第一个
+                continue
+            names.add(name)
+            out.append(d)
+    out.sort(key=lambda x: x["Name"].lower())
+    return out
+
+
+def clean_exec(exec_str):
+    exec_str = re.sub(r"%[fFuUdDnNickvm]", "", exec_str)
+    exec_str = exec_str.replace("%%", "%")
+    return " ".join(exec_str.split())
+
+
+def guess_icon(d):
+    cats = d.get("Categories", "")
+    if d.get("Terminal", "").lower() == "true" or "TerminalEmulator" in cats:
+        return "f120", "终端"
+    for key, val in [
+        ("Calculator", ("f1ec", "计算器")),
+        ("WebBrowser", ("f0ac", "浏览器")),
+        ("InstantMessaging", ("f086", "聊天")),
+        ("AudioPlayer", ("f001", "音乐")),
+        ("Audio", ("f001", "音乐")),
+        ("Video", ("f008", "视频")),
+        ("Graphics", ("f03e", "图片")),
+        ("Development", ("f121", "代码")),
+        ("TextEditor", ("f15c", "文档")),
+        ("Office", ("f15c", "文档")),
+        ("Game", ("f11b", "游戏")),
+        ("Calendar", ("f073", "日历")),
+        ("Network", ("f0ac", "浏览器")),
+        ("System", ("f013", "设置")),
+    ]:
+        if key in cats:
+            return val
+    return "f0eb", "其它"
+
+
+def make_id(d):
+    slug = re.sub(r"[^a-z0-9]+", "-", d["_id"].lower()).strip("-")
+    if not slug:
+        slug = "app"
+    existing = {a["id"] for a in load_apps()}
+    base, n = slug, 2
+    while slug in existing:
+        slug = f"{base}-{n}"
+        n += 1
+    return slug
+
+
+def load_apps():
+    with open(REG, encoding="utf-8") as f:
+        return json.load(f)["apps"]
+
+
+def save_apps(apps):
+    with open(REG, "w", encoding="utf-8") as f:
+        json.dump({"apps": apps}, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
+def choose_icon(d):
+    guess_hex, guess_name = guess_icon(d)
+    lines = [f"{h}  {n}" for h, n in ICONS] + ["custom  自定义 U+XXXX"]
+    labels = {f"{h}  {n}": h for h, n in ICONS}
+    labels["custom  自定义 U+XXXX"] = None
+
+    default_line = f"{guess_hex}  {guess_name}"
+    # 把猜测项挪到第一个，直接用回车确认最省事
+    lines.remove(default_line)
+    lines.insert(0, default_line)
+
+    sel = fuzzel("图标", lines)
+    if sel is None:
+        return None
+    if labels.get(sel) is None and sel.startswith("custom"):
+        raw = subprocess.run(
+            ["fuzzel", "--dmenu", "--prompt-only", "图标码位（十六进制，如 f121）", "--width", "46"],
+            input="",
+            text=True,
+            capture_output=True,
+        )
+        if raw.returncode != 0:
+            return None
+        raw = raw.stdout.strip().lower().lstrip("u+")
+        if not re.fullmatch(r"[0-9a-f]{4,6}", raw):
+            print("码位不合法")
+            return None
+        return raw
+    return labels.get(sel)
+
+
+def main():
+    apps = all_apps()
+    if not apps:
+        print("没有找到可启动的 .desktop 应用")
+        return 1
+
+    labels = {}
+    for d in apps:
+        # 名称后面补上 .desktop 的短标识（如 org.gnome.Nautilus -> nautilus），
+        # 这样按可执行文件名/包名也能搜到（例如输入 nautilus 能搜到 Files）。
+        short = d["_id"].split(".")[-1]
+        name = d["Name"]
+        label = name if short.lower() in name.lower() else f"{name} · {short}"
+        while label in labels:
+            label += " "
+        labels[label] = d
+
+    sel = fuzzel("添加应用", list(labels))
+    if sel is None:
+        return 0
+    if sel not in labels:
+        return 0
+    d = labels[sel]
+
+    icon = choose_icon(d)
+    if not icon:
+        return 0
+
+    cmd = clean_exec(d["Exec"])
+    if d.get("Terminal", "").lower() == "true":
+        cmd = "setsid -f kitty -e " + cmd
+    else:
+        cmd = "setsid -f " + cmd
+
+    entry = {
+        "id": make_id(d),
+        "name": d["Name"],
+        "icon": icon,
+        "exec": cmd,
+    }
+    apps_json = load_apps()
+    apps_json.append(entry)
+    save_apps(apps_json)
+    print(f"已添加 {entry['name']} ({icon}) -> {cmd}")
+    subprocess.run([os.path.join(H, "appsync")])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

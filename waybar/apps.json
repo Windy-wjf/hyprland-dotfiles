@@ -1,0 +1,34 @@
+{
+  "apps": [
+    {
+      "id": "qq",
+      "name": "QQ",
+      "icon": "f1d6",
+      "exec": "setsid -f /usr/bin/linuxqq"
+    },
+    {
+      "id": "wechat",
+      "name": "微信",
+      "icon": "f1d7",
+      "exec": "setsid -f /opt/wechat/wechat"
+    },
+    {
+      "id": "firefox",
+      "name": "Firefox",
+      "icon": "f269",
+      "exec": "setsid -f firefox"
+    },
+    {
+      "id": "org-gnome-nautilus",
+      "name": "Files",
+      "icon": "f07b",
+      "exec": "setsid -f nautilus --new-window"
+    },
+    {
+      "id": "com-follow-clash",
+      "name": "FlClash",
+      "icon": "f1e0",
+      "exec": "setsid -f flclash"
+    }
+  ]
+}

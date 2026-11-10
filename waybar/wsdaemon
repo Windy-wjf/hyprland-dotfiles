@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""把各工作区槽位状态写进小文件，供 waybar 用 cat 直接读取，避免每个槽位
+每 0.5s 都 fork 一个 python 进程（原来 10 个槽位 × 2 次/秒 = 20 个进程/秒，
+把 waybar 拖到 40% CPU）。"""
+import json
+import os
+import subprocess
+import time
+
+RUN = "/run/user/%d/waybar-ws" % os.getuid()
+SLOTS = 10
+INTERVAL = 0.45
+
+
+def hyprctl(args):
+    try:
+        r = subprocess.run(
+            ["hyprctl", "-j"] + args, capture_output=True, text=True, timeout=2
+        )
+        return json.loads(r.stdout) if r.stdout.strip() else None
+    except Exception:
+        return None
+
+
+def write(name, obj):
+    path = os.path.join(RUN, name)
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w") as f:
+            json.dump(obj, f, ensure_ascii=False)
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def tick():
+    act = hyprctl(["activeworkspace"]) or {}
+    active = act.get("id", -1) if isinstance(act, dict) else -1
+    wss = hyprctl(["workspaces"]) or []
+    counts = {}
+    for w in wss if isinstance(wss, list) else []:
+        if isinstance(w, dict) and isinstance(w.get("id"), int):
+            counts[w["id"]] = w.get("windows", 0)
+
+    for i in range(1, SLOTS + 1):
+        exists = i in counts or i == active
+        if i == active:
+            cls = "active"
+        elif counts.get(i, 0) > 0:
+            cls = "occupied"
+        else:
+            cls = ""
+        write(
+            "%d.json" % i,
+            {"text": str(i) if exists else "", "class": cls},
+        )
+
+
+def main():
+    os.makedirs(RUN, exist_ok=True)
+    while True:
+        try:
+            tick()
+        except Exception:
+            pass
+        time.sleep(INTERVAL)
+
+
+if __name__ == "__main__":
+    main()

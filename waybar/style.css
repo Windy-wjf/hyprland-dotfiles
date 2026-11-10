@@ -1,0 +1,345 @@
+/* Dark + cyan theme — matches the Hyprland accent rgba(33,204,255,1) */
+
+* {
+    font-family: "JetBrainsMono Nerd Font", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    text-shadow: none;
+}
+
+window#waybar {
+    background: rgba(20, 20, 30, 0.55);
+    color: #c8c8d2;
+}
+
+tooltip {
+    background: rgba(20, 20, 30, 0.96);
+    border: 1px solid rgba(33, 204, 255, 0.4);
+    border-radius: 6px;
+}
+
+tooltip label {
+    color: #c8c8d2;
+}
+
+/* ---- left ---------------------------------------------------------- */
+
+#window {
+    color: #21ccff;
+    padding: 0 11px;
+}
+
+#network,
+#memory,
+#custom-vram,
+#battery,
+#pulseaudio,
+#custom-brightness,
+#custom-cpu,
+#custom-clock {
+    color: #c8c8d2;
+    padding: 0 11px;
+}
+
+#window.empty,
+#network.disconnected {
+    color: #787882;
+}
+
+#memory.warning,
+#custom-vram.warning,
+#custom-cpu.warning,
+#battery.warning {
+    color: #ffb43c;
+}
+
+#memory.critical,
+#custom-vram.critical,
+#custom-cpu.critical,
+#battery.critical,
+#pulseaudio.muted {
+    color: #dc4646;
+}
+
+/* ---- center: workspaces -------------------------------------------- */
+
+#workspaces {
+    background: transparent;
+}
+
+#workspaces button {
+    color: #787882;
+    background: transparent;
+    padding: 0 11px;
+    margin: 0;
+    min-width: 0;
+    border: none;
+}
+
+#workspaces button.occupied {
+    color: #c8c8d2;
+}
+
+#workspaces button.active {
+    color: #21ccff;
+    font-weight: 700;
+}
+
+#workspaces button.urgent {
+    color: #dc4646;
+}
+
+#workspaces button:hover {
+    color: #21ccff;
+    background: rgba(33, 204, 255, 0.15);
+}
+
+/* ---- left: macOS-style Arch menu button ----------------------------- */
+#custom-archmenu {
+    color: #e8e8ee;
+    padding: 1px 7px 1px 5px;
+    font-size: 17px;
+    background: transparent;
+    border-radius: 6px;
+}
+#custom-archmenu:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+/* 系统托盘（QQ/微信等后台应用） */
+#tray {
+  padding: 0 6px;
+}
+#tray > .passive,
+#tray > .active,
+#tray > .needs-attention {
+  padding: 0 3px;
+  border-radius: 5px;
+  transition: background 120ms ease-in-out;
+}
+#tray > .passive:hover,
+#tray > .active:hover,
+#tray > .needs-attention:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+#tray > .needs-attention {
+  background: rgba(255, 180, 60, 0.30);
+  border-radius: 5px;
+}
+
+/* 新消息闪烁铃铛 */
+#custom-traybell {
+  color: #ffb43c;
+  padding: 0 5px;
+}
+#custom-traybell.off {
+  color: rgba(255, 180, 60, 0.12);
+}
+
+/* ---- 右侧分组底色（区分：网络 / 系统占用 / 托盘 / 时间） ---------- */
+#network {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  margin: 4px 5px;
+  padding: 0 10px;
+}
+
+#memory,
+#custom-vram,
+#custom-cpu {
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+  padding: 0 10px;
+}
+#memory {
+  border-radius: 9px 0 0 9px;
+  margin-left: 5px;
+}
+#custom-cpu {
+  border-radius: 0 9px 9px 0;
+  margin-right: 5px;
+}
+
+#tray {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  margin: 4px 5px;
+  padding: 0 8px;
+}
+
+#custom-clock {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  margin: 4px 5px;
+  padding: 0 10px;
+}
+
+/* ---- 左侧与中部底色 ------------------------------------------------ */
+#custom-archmenu {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  margin: 4px 5px;
+  padding: 1px 9px;
+}
+
+#window {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  margin: 4px 5px;
+  padding: 0 12px;
+}
+
+#workspaces {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  margin: 4px 5px;
+  padding: 0 4px;
+}
+
+/* ---- 音量 + 亮度：合并成一个胶囊 ------------------------------- */
+#pulseaudio,
+#custom-brightness {
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+  padding: 0 8px;
+}
+
+#pulseaudio {
+  border-radius: 9px 0 0 9px;
+  margin-left: 5px;
+  padding-left: 10px;
+}
+
+#custom-brightness {
+  border-radius: 0 9px 9px 0;
+  margin-right: 5px;
+  padding-right: 10px;
+}
+
+/* ---- 工作区（动态显示 + 新建按钮） ------------------------------- */
+#custom-ws1,
+#custom-ws2,
+#custom-ws3,
+#custom-ws4,
+#custom-ws5,
+#custom-ws6,
+#custom-ws7,
+#custom-ws8,
+#custom-ws9,
+#custom-ws10 {
+  background: rgba(255, 255, 255, 0.08);
+  color: #787882;
+  border-radius: 9px;
+  padding: 0 2px;
+  min-width: 22px;
+  margin: 4px 3px;
+}
+
+#custom-ws1.occupied,
+#custom-ws2.occupied,
+#custom-ws3.occupied,
+#custom-ws4.occupied,
+#custom-ws5.occupied,
+#custom-ws6.occupied,
+#custom-ws7.occupied,
+#custom-ws8.occupied,
+#custom-ws9.occupied,
+#custom-ws10.occupied {
+  color: #c8c8d2;
+}
+
+#custom-ws1.active,
+#custom-ws2.active,
+#custom-ws3.active,
+#custom-ws4.active,
+#custom-ws5.active,
+#custom-ws6.active,
+#custom-ws7.active,
+#custom-ws8.active,
+#custom-ws9.active,
+#custom-ws10.active {
+  color: #21ccff;
+  font-weight: 700;
+}
+
+#custom-ws1:hover,
+#custom-ws2:hover,
+#custom-ws3:hover,
+#custom-ws4:hover,
+#custom-ws5:hover,
+#custom-ws6:hover,
+#custom-ws7:hover,
+#custom-ws8:hover,
+#custom-ws9:hover,
+#custom-ws10:hover {
+  background: rgba(33, 204, 255, 0.15);
+}
+
+#custom-wsadd {
+  background: rgba(255, 255, 255, 0.06);
+  color: #8a8f99;
+  border-radius: 9px;
+  padding: 0 8px;
+  margin: 4px 3px;
+  font-weight: 700;
+}
+#custom-wsadd:hover {
+  background: rgba(33, 204, 255, 0.18);
+  color: #21ccff;
+}
+
+/* ==== apps:auto:start ==== */
+#custom-app-qq,
+#custom-app-wechat,
+#custom-app-firefox,
+#custom-app-org-gnome-nautilus,
+#custom-app-com-follow-clash,
+#custom-app-add,
+#custom-app-del {
+  background: rgba(255, 255, 255, 0.08);
+  color: #c8c8d2;
+  font-size: 15px;
+  padding: 0 10px;
+  margin: 4px 0;
+}
+
+#custom-app-qq {
+  border-radius: 9px 0 0 9px;
+  margin-left: 5px;
+}
+
+#custom-app-del {
+  border-radius: 0 9px 9px 0;
+  margin-right: 5px;
+}
+
+#custom-app-qq:hover,
+#custom-app-wechat:hover,
+#custom-app-firefox:hover,
+#custom-app-org-gnome-nautilus:hover,
+#custom-app-com-follow-clash:hover,
+#custom-app-add:hover,
+#custom-app-del:hover {
+  color: #21ccff;
+}
+/* ==== apps:auto:end ==== */
+
+/* 天气模块 */
+#custom-weather {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 9px;
+    margin: 4px 5px;
+    padding: 0 10px;
+    color: #c8c8d2;
+}
+#custom-weather.sunny  { color: #ffc24a; }
+#custom-weather.cloudy { color: #b9c0cc; }
+#custom-weather.rain   { color: #7cc4ff; }
+#custom-weather.snow   { color: #bfe6ff; }
+#custom-weather.storm  { color: #c79bff; }
+#custom-weather.fog    { color: #9aa0aa; }
