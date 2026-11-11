@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# 亮度滚轮调节：优先 DDC/CI 外接显示器，其次笔记本 backlight
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+CACHE="$HOME/.cache/waybar-brightness"
+step="${1:-5}"
+
+backlight_dev() {
+  for d in /sys/class/backlight/*; do
+    [ -e "$d" ] || continue
+    basename "$d"
+    return 0
+  done
+  return 1
+}
+
+cur=""
+out=$(timeout 6 ddcutil getvcp 10 --terse 2>/dev/null)
+if [[ "$out" =~ VCP\ 10\ C\ ([0-9]+)\ ([0-9]+) ]]; then
+  cur="${BASH_REMATCH[1]}"
+fi
+bl=""
+if [ -z "$cur" ]; then
+  bl=$(backlight_dev) || bl=""
+  if [ -n "$bl" ]; then
+    cur=$(brightnessctl -d "$bl" -m 2>/dev/null | awk -F, '{gsub(/%/,"",$4); print $4}' | head -1)
+    case "$cur" in ''|*[!0-9]*) cur="" ;; esac
+  fi
+fi
+[ -z "$cur" ] && cur=$(cat "$CACHE" 2>/dev/null || echo 50)
+case "$cur" in ''|*[!0-9]*) cur=50 ;; esac
+
+new=$(( cur + step ))
+[ "$new" -lt 0 ] && new=0
+[ "$new" -gt 100 ] && new=100
+
+ok=0
+if timeout 6 ddcutil setvcp 10 "$new" >/dev/null 2>&1; then
+  ok=1
+elif [ -n "$bl" ] && brightnessctl -d "$bl" set "${new}%" >/dev/null 2>&1; then
+  ok=1
+fi
+if [ "$ok" -eq 1 ]; then
+  printf '%s' "$new" > "$CACHE"
+fi

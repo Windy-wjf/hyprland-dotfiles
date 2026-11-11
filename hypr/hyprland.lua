@@ -57,10 +57,16 @@ local menu = "rofi -show run"
 -- 用 pgrep 兜底，避免 hyprctl reload 或会话重启时出现重复进程。
 hl.on("hyprland.start", function()
   hl.exec_cmd("sh -c 'pgrep -x waybar  >/dev/null || waybar'")
-  hl.exec_cmd("sh -c 'pgrep -f waybar/wsd[a]emon >/dev/null || python3 $HOME/.config/waybar/wsdaemon'")
+  hl.exec_cmd("sh -c 'pgrep -f waybar/wsd[a]emon >/dev/null || python3 /home/wjf/.config/waybar/wsdaemon'")
   hl.exec_cmd("sh -c 'pgrep -x fcitx5 >/dev/null || fcitx5 -d'")
   hl.exec_cmd("sh -c 'pgrep -x hyprpaper >/dev/null || hyprpaper'")
-  hl.exec_cmd("sh -c 'pgrep -x hypridle >/dev/null || hypridle'")
+  hl.exec_cmd("sh -c 'sleep 2; pgrep -f bing-wallpape[r].*--daemon >/dev/null || setsid python3 /home/wjf/.config/hypr/bing-wallpaper --daemon >/dev/null 2>&1'")
+    hl.exec_cmd("sh -c 'pgrep -x swaync >/dev/null || setsid swaync >/dev/null 2>&1'")
+    hl.exec_cmd("sh -c 'pgrep -x hyprsunset >/dev/null || setsid hyprsunset -i >/dev/null 2>&1'")
+    hl.exec_cmd("sh -c 'pgrep -f \"wl-paste --type text --watch cliphist stor[e]\" >/dev/null || setsid wl-paste --type text --watch cliphist store >/dev/null 2>&1'")
+    hl.exec_cmd("sh -c 'pgrep -f \"wl-paste --type image --watch cliphist stor[e]\" >/dev/null || setsid wl-paste --type image --watch cliphist store >/dev/null 2>&1'")
+  hl.exec_cmd("sh -c 'sleep 2; pgrep -x hypridle >/dev/null || setsid hypridle >/tmp/hypridle.log 2>&1'")
+  hl.exec_cmd("sh -c 'pgrep -x hyprpolkitagent >/dev/null || setsid /usr/lib/hyprpolkitagent/hyprpolkitagent >/tmp/polkit.log 2>&1'")
 end)
 
 
@@ -289,7 +295,7 @@ hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("command -v hyprshutdown >/dev/null 2
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + F", hl.dsp.window.fullscreen())
-hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("python3 $HOME/.config/waybar/wallpick"))
+hl.bind(mainMod .. " + W", hl.dsp.exec_cmd("python3 /home/wjf/.config/waybar/wallpick"))
 hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(menu))
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))    -- dwindle only
@@ -334,6 +340,15 @@ hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = tr
 hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
 hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
 
+
+-- 截图、锁屏、剪贴板、夜间模式、录屏、快捷键帮助
+hl.bind("Print", hl.dsp.exec_cmd("bash /home/wjf/.config/waybar/screenshot"))
+hl.bind("SHIFT + Print", hl.dsp.exec_cmd("bash /home/wjf/.config/waybar/screenshot full"))
+hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("sh -c 'pidof hyprlock >/dev/null || hyprlock'"))
+hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd("bash /home/wjf/.config/waybar/clipmenu"))
+hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("bash /home/wjf/.config/waybar/night toggle"))
+hl.bind(mainMod .. " + SHIFT + R", hl.dsp.exec_cmd("bash /home/wjf/.config/waybar/record"))
+hl.bind(mainMod .. " + slash", hl.dsp.exec_cmd("python3 /home/wjf/.config/waybar/popup.py keys"))
 
 --------------------------------
 ---- WINDOWS AND WORKSPACES ----
@@ -389,13 +404,7 @@ hl.window_rule({
 -- overlayLayerRule:set_enabled(false)
 
 -- Waybar 背景高斯模糊（配合 style.css 里的半透明背景）
-hl.layer_rule({
-    name  = "blur-waybar",
-    match = { namespace = "^waybar$" },
 
-    blur         = true,
-    ignore_alpha = 0.2,
-})
 
 -- Hyprland-run windowrule
 hl.window_rule({
@@ -404,4 +413,18 @@ hl.window_rule({
 
     move  = "20 monitor_h-120",
     float = true,
+})
+hl.layer_rule({
+    name  = "blur-waybar-popup",
+    match = { namespace = "^waybar-popup$" },
+
+    blur         = true,
+    ignore_alpha = 0.2,
+})
+hl.layer_rule({
+    name  = "blur-waybar",
+    match = { namespace = "^waybar$" },
+
+    blur         = true,
+    ignore_alpha = 0.2,
 })

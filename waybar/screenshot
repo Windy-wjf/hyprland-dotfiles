@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# 截图：默认框选；参数 full 截全屏
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+dir="$HOME/Pictures/Screenshots"; mkdir -p "$dir"
+f="$dir/$(date +%Y-%m-%d_%H-%M-%S).png"
+if [ "${1:-}" = "full" ]; then
+  grim "$f" || exit 1
+else
+  geom=$(slurp) || exit 0
+  [ -n "$geom" ] || exit 0
+  grim -g "$geom" "$f" || exit 1
+fi
+notify-send -i "$f" "截图已保存" "$f" >/dev/null 2>&1

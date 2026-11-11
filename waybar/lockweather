@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+date +%T > /tmp/lockweather_called
+python3 "$HOME/.config/waybar/weather" --text

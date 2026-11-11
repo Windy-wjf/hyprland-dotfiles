@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# 剪贴板历史：cliphist + fuzzel
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+sel=$(cliphist list | fuzzel --dmenu --prompt " 剪贴板" --lines 12 --width 60) || exit 0
+[ -n "$sel" ] || exit 0
+printf '%s' "$sel" | cliphist decode | wl-copy

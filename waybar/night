@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# 夜间模式（hyprsunset）控制：toggle / status / set K / adjust D
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+STATE="$XDG_RUNTIME_DIR/waybar-night"
+TEMP_FILE="$XDG_RUNTIME_DIR/waybar-night-temp"
+DEFAULT_TEMP=4500
+
+ensure_daemon() {
+  pgrep -x hyprsunset >/dev/null && return 0
+  setsid hyprsunset -i >/dev/null 2>&1 &
+  sleep 0.6
+}
+
+cur_temp() {
+  if [ -f "$TEMP_FILE" ]; then
+    t=$(cat "$TEMP_FILE" 2>/dev/null)
+    case "$t" in ''|*[!0-9]*) t="$DEFAULT_TEMP" ;; esac
+    printf '%s' "$t"
+  else
+    printf '%s' "$DEFAULT_TEMP"
+  fi
+}
+
+apply_temp() {
+  ensure_daemon
+  printf '%s' "$1" > "$TEMP_FILE"
+  : > "$STATE"
+  hyprctl hyprsunset temperature "$1" >/dev/null 2>&1
+}
+
+case "${1:-status}" in
+  toggle)
+    if [ -f "$STATE" ]; then
+      rm -f "$STATE"
+      hyprctl hyprsunset identity >/dev/null 2>&1
+    else
+      apply_temp "$(cur_temp)"
+    fi
+    ;;
+  off)
+    rm -f "$STATE"
+    hyprctl hyprsunset identity >/dev/null 2>&1
+    ;;
+  set)
+    t="${2:-$DEFAULT_TEMP}"
+    case "$t" in ''|*[!0-9]*) t="$DEFAULT_TEMP" ;; esac
+    [ "$t" -lt 2000 ] && t=2000
+    [ "$t" -gt 6500 ] && t=6500
+    apply_temp "$t"
+    ;;
+  adjust)
+    d="${2:-100}"
+    t=$(( $(cur_temp) + d ))
+    [ "$t" -lt 2000 ] && t=2000
+    [ "$t" -gt 6500 ] && t=6500
+    if [ -f "$STATE" ]; then apply_temp "$t"; else apply_temp "$t"; fi
+    ;;
+  status)
+    if [ -f "$STATE" ] && pgrep -x hyprsunset >/dev/null; then
+      printf '{"text": " ", "tooltip": "夜间模式 · %sK（点击调整）", "class": "on"}\n' "$(cur_temp)"
+    else
+      printf '{"text": " ", "tooltip": "夜间模式已关闭（点击开启）", "class": ""}\n'
+    fi
+    ;;
+esac

@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 
+# fcitx5 runtime cache
+cached_layouts
+
 # Editor / OS noise and local backups
 *.bak
 *.tmp

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# 录屏开关：wf-recorder，输出到 ~/Videos/Recordings
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+dir="$HOME/Videos/Recordings"; mkdir -p "$dir"
+if pgrep -x wf-recorder >/dev/null; then
+  pkill -INT -x wf-recorder
+  sleep 0.6
+  last=$(ls -t "$dir"/*.mp4 2>/dev/null | head -1)
+  notify-send -i video-x-generic "录屏已停止" "${last:-已保存到 $dir}" >/dev/null 2>&1
+else
+  out=$(hyprctl -j monitors 2>/dev/null | python3 -c "import json,sys;print(json.load(sys.stdin)[0]['name'])" 2>/dev/null)
+  f="$dir/$(date +%F_%H-%M-%S).mp4"
+  setsid wf-recorder ${out:+-o "$out"} -f "$f" >/tmp/wf-recorder.log 2>&1 &
+  sleep 0.6
+  notify-send -i video-x-generic "开始录屏" "$f" >/dev/null 2>&1
+fi

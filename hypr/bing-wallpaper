@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+# Bing 每日壁纸
+#   bing-wallpaper            检查并更新（当天已更新则跳过；下载/设置失败保留当前壁纸）
+#   bing-wallpaper --force    强制重新应用
+#   bing-wallpaper --daemon   常驻：登录时补跑一次，之后每天 07:30 自动刷新
+import datetime
+import fcntl
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.request
+
+HOME = os.path.expanduser("~")
+PIC_DIR = os.path.join(HOME, "Pictures", "bing")
+STATE = os.path.join(HOME, ".cache", "bing-wallpaper.json")
+LOG = os.path.join(HOME, ".cache", "bing-wallpaper.log")
+CONF = os.path.join(HOME, ".config", "hypr", "hyprpaper.conf")
+LOCK = f"/run/user/{os.getuid()}/bing-wallpaper.lock"
+MONITOR = os.environ.get("BING_MONITOR", "DP-1")
+
+# 每天刷新时间（本地时区）
+UPDATE_HOUR = 7
+UPDATE_MINUTE = 30
+
+UA = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+}
+
+
+def log(msg):
+    os.makedirs(os.path.dirname(LOG), exist_ok=True)
+    with open(LOG, "a") as f:
+        f.write(f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] {msg}\n")
+
+
+def hypr_env():
+    env = os.environ.copy()
+    env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    env.setdefault("WAYLAND_DISPLAY", "wayland-1")
+    if not env.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        base = os.path.join(env["XDG_RUNTIME_DIR"], "hypr")
+        try:
+            for name in sorted(os.listdir(base)):
+                if os.path.exists(os.path.join(base, name, ".socket.sock")):
+                    env["HYPRLAND_INSTANCE_SIGNATURE"] = name
+        except OSError:
+            pass
+    return env
+
+
+def hyprctl(*args):
+    try:
+        r = subprocess.run(
+            ["hyprctl", *args], env=hypr_env(),
+            capture_output=True, text=True, timeout=25,
+        )
+        return r.returncode, (r.stdout or "").strip(), (r.stderr or "").strip()
+    except Exception as e:  # noqa: BLE001
+        return 1, "", str(e)
+
+
+def monitors():
+    """当前可用的显示器名列表（含无实体显示器时的 FALLBACK）"""
+    rc, out, _ = hyprctl("-j", "monitors", "all")
+    try:
+        ms = json.loads(out)
+    except Exception:  # noqa: BLE001
+        return []
+    return [m["name"] for m in ms if not m.get("disabled", False)]
+
+
+def load_state():
+    try:
+        with open(STATE) as f:
+            return json.load(f)
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def save_state(state):
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    with open(STATE, "w") as f:
+        json.dump(state, f, ensure_ascii=False, indent=1)
+
+
+def fetch():
+    """返回 {'date': 'YYYYMMDD', 'url': UHD 地址, 'slug': 名字, 'title': 标题}"""
+    url = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN"
+    req = urllib.request.Request(url, headers=UA)
+    data = json.load(urllib.request.urlopen(req, timeout=25))
+    img = data["images"][0]
+    base = img["urlbase"]
+    m = re.search(r"OHR[._]([A-Za-z0-9\-]+)", base)
+    slug = (m.group(1).split("_")[0] if m else "bing")[:48]
+    uhd = f"https://www.bing.com{base}_UHD.jpg&pid=hp&w=3840&h=2160&rs=1&c=4"
+    return {"date": img["startdate"], "url": uhd,
+            "slug": slug, "title": img.get("title", "")}
+
+
+def download(url, path):
+    if os.path.exists(path) and os.path.getsize(path) > 100_000:
+        return path
+    data = urllib.request.urlopen(
+        urllib.request.Request(url, headers=UA), timeout=90).read()
+    if len(data) < 50_000:
+        raise RuntimeError(f"下载内容过小：{len(data)} bytes")
+    tmp = path + ".part"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, path)
+    return path
+
+
+def update(force=False):
+    state = load_state()
+    try:
+        img = fetch()
+    except Exception as e:  # noqa: BLE001
+        log(f"获取 Bing 信息失败：{e}")
+        return 1
+
+    if (not force and state.get("image_date") == img["date"]
+            and state.get("path") and os.path.exists(state["path"])):
+        log(f"壁纸已是最新（{img['date']} {img['slug']}），跳过")
+        return 0
+
+    d = img["date"]
+    name = f"bing-{d[:4]}-{d[4:6]}-{d[6:]}-{img['slug']}.jpg"
+    path = os.path.join(PIC_DIR, name)
+    try:
+        os.makedirs(PIC_DIR, exist_ok=True)
+        download(img["url"], path)
+    except Exception as e:  # noqa: BLE001
+        log(f"下载失败，保留当前壁纸：{e}")
+        return 1
+
+    # 应用到所有已连接的显示器（无实体屏时名字是 FALLBACK）
+    names = monitors() or ["FALLBACK"]
+    applied = False
+    for n in names:
+        rc, out, err = hyprctl("hyprpaper", "wallpaper", f"{n},{path},fill")
+        if rc == 0 and "error" not in (out or "").lower():
+            applied = True
+        else:
+            log(f"设置壁纸失败 monitor={n} rc={rc} out={out!r} err={err!r}")
+
+    # 同步写回配置，hyprpaper 重启后仍是这张；monitor 行去掉 → 作用于所有显示器
+    try:
+        txt = open(CONF).read()
+        new = re.sub(r"(?m)^\s*monitor\s*=.*\n?", "", txt)
+        new = re.sub(r"(?m)^(\s*path\s*=\s*).*$",
+                     lambda m: m.group(1) + path, new, count=1)
+        if new != txt:
+            with open(CONF, "w") as f:
+                f.write(new)
+    except Exception as e:  # noqa: BLE001
+        log(f"更新 hyprpaper.conf 失败：{e}")
+
+    state.update({
+        "image_date": d,
+        "path": path,
+        "title": img["title"],
+        "applied_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    })
+    save_state(state)
+    log(f"已更新壁纸：{path}（{img['title']}）applied={applied}")
+    print(path)
+    return 0
+
+
+def next_target(now):
+    t = now.replace(hour=UPDATE_HOUR, minute=UPDATE_MINUTE, second=0, microsecond=0)
+    if t <= now:
+        t += datetime.timedelta(days=1)
+    return t
+
+
+def daemon():
+    # 单实例
+    lock_fd = os.open(LOCK, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        log("已有守护进程在运行，退出")
+        return
+
+    log("守护进程启动（每天 %02d:%02d 刷新）" % (UPDATE_HOUR, UPDATE_MINUTE))
+    while True:
+        # 启动/登录时：如果有新图就补跑一次
+        try:
+            state = load_state()
+            img = fetch()
+            if state.get("image_date") != img["date"]:
+                update()
+        except Exception as e:  # noqa: BLE001
+            log(f"启动检查失败：{e}")
+
+        target = next_target(datetime.datetime.now())
+        while True:
+            now = datetime.datetime.now()
+            if now >= target:
+                break
+            time.sleep(min(300, max(5, (target - now).total_seconds())))
+
+        try:
+            update(force=True)
+        except Exception as e:  # noqa: BLE001
+            log(f"定时刷新失败：{e}")
+
+
+if __name__ == "__main__":
+    argv = sys.argv[1:]
+    if "--daemon" in argv:
+        daemon()
+    else:
+        sys.exit(update(force="--force" in argv))

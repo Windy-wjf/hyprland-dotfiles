@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""waybar 更新计数：checkupdates 输出的包数；0 个时隐藏。"""
+import json
+import subprocess
+
+def main():
+    lines = []
+    try:
+        r = subprocess.run(["checkupdates"], capture_output=True, text=True, timeout=120)
+        lines = [l for l in r.stdout.splitlines() if l.strip()]
+    except Exception:
+        lines = []
+    n = len(lines)
+    if n == 0:
+        print(json.dumps({"text": "", "tooltip": "系统已是最新"}))
+        return
+    tip = "待更新 %d 个包（点击升级）\n" % n + "\n".join(lines[:50])
+    print(json.dumps({"text": str(n), "tooltip": tip, "class": "pending"}))
+
+if __name__ == "__main__":
+    main()

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """waybar 天气模块：数据来自 wttr.in，10 分钟缓存，失败时回退旧数据。"""
-import json, os, time, urllib.parse, urllib.request
+import json, os, sys, time, urllib.parse, urllib.request
 
 DEFAULT_CITY = "Shanghai"
-CITY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "weather.city")
-CACHE = "/run/user/%d/waybar-weather.json" % os.getuid()
+CITY_FILE = "/home/wjf/.config/waybar/weather.city"
+CACHE = "/run/user/1000/waybar-weather.json"
 TTL = 600
 
 
@@ -98,6 +98,7 @@ def save_cache(name, data):
     os.replace(tmp, CACHE)
 
 def main():
+    text_mode = "--text" in sys.argv
     name = city_setting()
     data, ts, cached_city = load_cache()
     if not data or cached_city != name or time.time() - ts > TTL:
@@ -107,7 +108,10 @@ def main():
         except Exception:
             pass
     if not data:
-        print(json.dumps({"text": "—", "tooltip": "天气获取失败", "class": "cloudy"}, ensure_ascii=False))
+        if text_mode:
+            print("天气获取失败")
+        else:
+            print(json.dumps({"text": "—", "tooltip": "天气获取失败", "class": "cloudy"}, ensure_ascii=False))
         return
 
     c = data["current_condition"][0]
@@ -148,6 +152,10 @@ def main():
             pass
         lines.append(f"更新 {obs}")
     lines.append("点击查看详情")
+
+    if text_mode:
+        print(f"{icon}  {city_cn} · {desc} · {temp}°C（体感 {feels}°C）")
+        return
 
     print(json.dumps({
         "text": f"{icon} {temp}°",

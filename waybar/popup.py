@@ -6,10 +6,11 @@
 点面板以外的任何位置（包括状态栏图标）或按 Esc 立即关闭，
 不会再出现“打开后关不掉”的问题。
 
-用法：popup.py [volume|brightness|network|calendar]
+用法：popup.py [volume|brightness|network|calendar|power|bluetooth|night|keys]
 """
 import calendar
 import datetime
+import glob
 import os
 import re
 import signal
@@ -36,8 +37,8 @@ CSS = """
 window.popupwin, window.popupwin contents { background: transparent; }
 window.popupwin { font-family: "JetBrainsMono Nerd Font", monospace; }
 .panel {
-    background-color: #1c1c22;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background-color: rgba(20, 20, 30, 0.55);
+    border: none;
     border-radius: 16px;
     padding: 14px 16px;
 }
@@ -45,6 +46,9 @@ window.popupwin { font-family: "JetBrainsMono Nerd Font", monospace; }
 .title { color: #e8e8ee; font-size: 13px; font-weight: bold; }
 .sub { color: #9aa0aa; font-size: 11px; }
 .rowtext { color: #e8e8ee; font-size: 12px; }
+.keysrow { padding: 1px 6px; }
+.key { color: #8fd3ff; font-size: 11px; font-family: "JetBrainsMono Nerd Font"; }
+.keydesc { color: #c8c8d2; font-size: 11px; }
 .val { color: #58a6ff; font-size: 13px; font-weight: bold; }
 button.row {
     background: transparent;
@@ -108,6 +112,23 @@ def bg(cmd):
         pass
 
 
+def hypr_env():
+    """给 hyprctl 用的环境变量（缺失时自动找实例）。"""
+    env = dict(os.environ)
+    env.setdefault("XDG_RUNTIME_DIR", "/run/user/%d" % os.getuid())
+    env.setdefault("WAYLAND_DISPLAY", "wayland-1")
+    if not env.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        base = os.path.join(env["XDG_RUNTIME_DIR"], "hypr")
+        try:
+            for name in sorted(os.listdir(base)):
+                if os.path.exists(os.path.join(base, name, ".socket.sock")):
+                    env["HYPRLAND_INSTANCE_SIGNATURE"] = name
+                    break
+        except OSError:
+            pass
+    return env
+
+
 def terse_split(line):
     """nmcli -t 输出按未转义的 ':' 切分。"""
     out, cur, esc = [], "", False
@@ -169,18 +190,47 @@ def default_sink():
 # --------------------------------------------------------------------------- #
 # 亮度（外接显示器 DDC/CI）
 # --------------------------------------------------------------------------- #
+def backlight_devices():
+    try:
+        return sorted(glob.glob("/sys/class/backlight/*"))
+    except OSError:
+        return []
+
+
 def get_brightness():
     r = run(["ddcutil", "getvcp", "10", "--terse"], timeout=6)
     m = re.search(r"VCP 10 C (\d+) (\d+)", (r.stdout or "") if r else "")
-    return int(m.group(1)) if m else 50
+    if m:
+        return int(m.group(1))
+    for dev in backlight_devices():
+        r = run(["brightnessctl", "-d", os.path.basename(dev), "-m"], timeout=4)
+        m = re.search(r"(\d+)%", (r.stdout or "") if r else "")
+        if m:
+            return int(m.group(1))
+    try:
+        with open(CACHE) as f:
+            return max(0, min(100, int(f.read().strip())))
+    except (OSError, ValueError):
+        return 50
 
 
 def set_brightness(v):
-    run(["ddcutil", "setvcp", "10", str(int(v))], timeout=6)
+    target = str(int(v))
+    ok = False
+    r = run(["ddcutil", "setvcp", "10", target], timeout=6)
+    if r is not None and r.returncode == 0 and "No displays" not in (r.stdout or "") + (r.stderr or ""):
+        ok = True
+    if not ok:
+        for dev in backlight_devices():
+            if run(["brightnessctl", "-d", os.path.basename(dev), "set", target + "%"], timeout=4) is not None:
+                ok = True
+                break
+    if not ok:
+        return
     try:
         os.makedirs(os.path.dirname(CACHE), exist_ok=True)
         with open(CACHE, "w") as f:
-            f.write(str(int(v)))
+            f.write(target)
     except OSError:
         pass
 
@@ -230,6 +280,119 @@ def scan_aps():
         aps.append(ap)
     aps.sort(key=lambda a: (not a["active"], -a["signal"]))
     return aps[:14]
+
+
+# --------------------------------------------------------------------------- #
+# 蓝牙
+# --------------------------------------------------------------------------- #
+def bt_powered():
+    r = run(["bluetoothctl", "show"], timeout=6)
+    return bool(re.search(r"^\s*Powered:\s*yes", (r.stdout or "") if r else "", re.M))
+
+
+def bt_devices():
+    out = []
+    r = run(["bluetoothctl", "devices"], timeout=6)
+    if not r or r.returncode != 0:
+        return out
+    for line in r.stdout.splitlines():
+        m = re.match(r"^Device ([0-9A-Fa-f:]{17})\s+(.*)$", line.strip())
+        if not m:
+            continue
+        mac, name = m.group(1), m.group(2).strip() or m.group(1)
+        info = run(["bluetoothctl", "info", mac], timeout=6)
+        txt = (info.stdout or "") if info else ""
+        out.append({
+            "mac": mac,
+            "name": name,
+            "connected": "Connected: yes" in txt,
+            "paired": "Paired: yes" in txt,
+            "battery": bt_battery(mac) if "Connected: yes" in txt else None,
+        })
+    out.sort(key=lambda d: (not d["connected"], not d["paired"], d["name"].lower()))
+    return out
+
+
+def bt_power(on):
+    if on:
+        run(["rfkill", "unblock", "bluetooth"], timeout=5)
+    run(["bluetoothctl", "power", "on" if on else "off"], timeout=10)
+
+
+def bt_connect(mac, currently_connected):
+    if currently_connected:
+        run(["bluetoothctl", "disconnect", mac], timeout=25)
+        return
+    r = run(["bluetoothctl", "connect", mac], timeout=25)
+    blob = ((r.stdout or "") + (r.stderr or "")).lower() if r else ""
+    if "successful" not in blob:
+        run(["bluetoothctl", "pair", mac], timeout=25)
+        run(["bluetoothctl", "connect", mac], timeout=25)
+
+
+
+def bt_battery(mac):
+    """读取 BlueZ Battery1 的 Percentage（设备不支持则返回 None）。"""
+    suffix = "dev_" + mac.replace(":", "_").upper()
+    path = None
+    tree = run(["busctl", "--system", "tree", "org.bluez"], timeout=8)
+    if tree and tree.returncode == 0:
+        for line in (tree.stdout or "").splitlines():
+            line = line.strip()
+            if line.startswith("/org/bluez/") and line.endswith(suffix):
+                path = line
+                break
+    if not path:
+        return None
+    for iface in ("org.bluez.Battery1", "org.bluez.Device1"):
+        prop = "Percentage" if iface.endswith("Battery1") else "Battery"
+        r = run(["busctl", "--system", "get-property", "org.bluez", path, iface, prop], timeout=5)
+        if r and r.returncode == 0:
+            m = re.search(r"\b(\d{1,3})$", (r.stdout or "").strip())
+            if m:
+                return max(0, min(100, int(m.group(1))))
+    return None
+
+
+def bt_battery_icon(pct):
+    if pct is None:
+        return "\uf293"
+    if pct >= 80:
+        return "\uf240"
+    if pct >= 60:
+        return "\uf241"
+    if pct >= 40:
+        return "\uf242"
+    if pct >= 20:
+        return "\uf243"
+    return "\uf244"
+
+# --------------------------------------------------------------------------- #
+# 夜间模式
+# --------------------------------------------------------------------------- #
+NIGHT_SCRIPT = os.path.join(HOME, ".config", "waybar", "night")
+
+
+def night_status():
+    r = run(["bash", NIGHT_SCRIPT, "status"], timeout=6)
+    return bool(r and '"on"' in (r.stdout or ""))
+
+
+def night_temp():
+    path = "/run/user/%d/waybar-night-temp" % os.getuid()
+    try:
+        with open(path) as f:
+            return max(2000, min(6500, int(f.read().strip())))
+    except (OSError, ValueError):
+        return 4500
+
+
+def night_set(k):
+    run(["bash", NIGHT_SCRIPT, "set", str(int(k))], timeout=8)
+
+
+def night_off():
+    run(["bash", NIGHT_SCRIPT, "off"], timeout=8)
 
 
 # --------------------------------------------------------------------------- #
@@ -285,6 +448,18 @@ class Popup:
             self.build_brightness()
         elif mode == "calendar":
             self.build_calendar()
+        elif mode == "bluetooth":
+            self.build_bluetooth()
+        elif mode == "night":
+            self.build_night()
+        elif mode == "keys":
+            self.build_keys()
+        elif mode == "power":
+            self.panel.set_halign(Gtk.Align.START)
+            self.panel.set_margin_start(4)
+            self.panel.set_margin_end(0)
+            self.panel.set_size_request(190, -1)
+            self.build_power()
         else:
             self.build_volume()
 
@@ -351,8 +526,12 @@ class Popup:
     def _on_press(self, gesture, n_press, x, y):
         try:
             pw, ph = self.panel.get_width(), self.panel.get_height()
-            left = self.root.get_width() - pw - MARGIN_END
-            if left - 2 <= x <= left + pw + 2 and MARGIN_TOP - 2 <= y <= MARGIN_TOP + ph + 2:
+            top = self.panel.get_margin_top()
+            if self.mode == "power":
+                left = self.panel.get_margin_start()
+            else:
+                left = self.root.get_width() - pw - MARGIN_END
+            if left - 2 <= x <= left + pw + 2 and top - 2 <= y <= top + ph + 2:
                 return
         except Exception:
             pass
@@ -456,7 +635,14 @@ class Popup:
         self.scale.connect("value-changed", self._on_bri_change)
         self.panel.append(self.scale)
 
-        info = Gtk.Label(label="DDC/CI · DP-1 · HKC G27H7Pro")
+        has_ddc = bool(re.search(r"VCP 10 C", (run(["ddcutil", "getvcp", "10", "--terse"], timeout=6) or "").stdout or ""))
+        if has_ddc:
+            info_text = "DDC/CI 外接显示器"
+        elif backlight_devices():
+            info_text = "笔记本背光 · " + os.path.basename(backlight_devices()[0])
+        else:
+            info_text = "未检测到可调亮度设备（当前显示缓存值）"
+        info = Gtk.Label(label=info_text)
         info.add_css_class("sub")
         info.set_xalign(0)
         self.panel.append(info)
@@ -492,6 +678,61 @@ class Popup:
         self.val_lbl.set_label("%d%%" % pct)
         self._sync = False
         set_brightness(pct)
+
+
+    # -- 快捷键速查 --------------------------------------------------------
+    def build_keys(self):
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        il = Gtk.Label(label="\uf11c")
+        il.add_css_class("icon")
+        tl = Gtk.Label(label="快捷键")
+        tl.add_css_class("title")
+        tl.set_xalign(0)
+        tl.set_hexpand(True)
+        head.append(il)
+        head.append(tl)
+        self.panel.append(head)
+
+        rows = [
+            ("Super + Return", "终端"),
+            ("Super + Q", "关闭窗口"),
+            ("Super + E", "文件管理器"),
+            ("Super + R", "运行命令"),
+            ("Super + W", "壁纸选择"),
+            ("Super + V", "浮动切换"),
+            ("Super + F", "全屏"),
+            ("Super + P", "伪平铺"),
+            ("Super + J", "切换布局"),
+            ("Super + S", "暂存工作区"),
+            ("Super + Shift + S", "移到暂存区"),
+            ("Super + 1…0", "切换工作区"),
+            ("Super + Shift + 1…0", "移动窗口到工作区"),
+            ("Super + 方向键", "聚焦窗口"),
+            ("Super + 滚轮", "切换工作区"),
+            ("Super + 拖拽", "移动 / 缩放窗口"),
+            ("Print", "截图（框选）"),
+            ("Shift + Print", "全屏截图"),
+            ("Super + L", "锁屏"),
+            ("Super + Shift + V", "剪贴板历史"),
+            ("Super + N", "夜间模式开关"),
+            ("Super + Shift + R", "开始 / 停止录屏"),
+            ("Super + M", "退出会话"),
+            ("Super + /", "本速查表"),
+        ]
+        for keys, desc in rows:
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            box.add_css_class("keysrow")
+            kl = Gtk.Label(label=keys)
+            kl.add_css_class("key")
+            kl.set_xalign(0)
+            kl.set_size_request(190, -1)
+            dl = Gtk.Label(label=desc)
+            dl.add_css_class("keydesc")
+            dl.set_xalign(0)
+            dl.set_hexpand(True)
+            box.append(kl)
+            box.append(dl)
+            self.panel.append(box)
 
     # -- 日历 --------------------------------------------------------------
     def build_calendar(self):
@@ -568,6 +809,207 @@ class Popup:
         self.render_calendar()
 
     # -- 网络 --------------------------------------------------------------
+    # -- 电源菜单 ----------------------------------------------------------
+    def build_power(self):
+        title = Gtk.Label(label="电源")
+        title.add_css_class("title")
+        title.set_xalign(0)
+        title.set_margin_bottom(2)
+        self.panel.append(title)
+
+        items = (
+            ("\uf023", "锁屏", ["sh", "-c", "pidof hyprlock >/dev/null || hyprlock"]),
+            ("\uf186", "睡眠", ["systemctl", "suspend"]),
+            ("\uf011", "关机", ["systemctl", "poweroff"]),
+            ("\uf021", "重启", ["systemctl", "reboot"]),
+            ("\uf08b", "登出", ["hyprctl", "dispatch", "hl.dsp.exit()"]),
+        )
+        for icon, text, cmd in items:
+            btn, _, _ = self.make_row(
+                text, icon=icon, cb=lambda _b, c=cmd: self._power_action(c)
+            )
+            btn.add_css_class("power")
+            self.panel.append(btn)
+
+
+
+    # -- 夜间模式 ----------------------------------------------------------
+    def _night_apply(self):
+        self._night_timer = 0
+        if getattr(self, "night_scale", None) is None:
+            return False
+        temp = int(self.night_scale.get_value())
+        night_set(temp)
+        if getattr(self, "night_sw", None) is not None and not self.night_sw.get_active():
+            self.night_sw.set_active(True)
+        if getattr(self, "night_value", None) is not None:
+            self.night_value.set_text("%dK · 越低越暖" % temp)
+        return False
+
+    def _night_changed(self, scale):
+        if self._night_sync:
+            return
+        self._night_sync = True
+        if self._night_timer:
+            GLib.source_remove(self._night_timer)
+        self._night_timer = GLib.timeout_add(260, self._night_apply)
+        return
+
+    def _night_preset(self, temp):
+        self.night_scale.set_value(float(temp))
+        self._night_apply()
+
+    def _on_night_switch(self, _sw, state):
+        if state:
+            night_set(int(self.night_scale.get_value()))
+            if self.night_value:
+                self.night_value.set_text("%dK · 越低越暖" % int(self.night_scale.get_value()))
+        else:
+            night_off()
+            if self.night_value:
+                self.night_value.set_text("已关闭")
+        return False
+
+    def build_night(self):
+        self._night_sync = False
+        self._night_timer = 0
+        on = night_status()
+        temp = night_temp()
+
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        il = Gtk.Label(label="\uf186")
+        il.add_css_class("icon")
+        tl = Gtk.Label(label="夜间模式")
+        tl.add_css_class("title")
+        tl.set_xalign(0)
+        tl.set_hexpand(True)
+        sw = Gtk.Switch()
+        sw.set_active(on)
+        sw.connect("state-set", self._on_night_switch)
+        self.night_sw = sw
+        head.append(il)
+        head.append(tl)
+        head.append(sw)
+        self.panel.append(head)
+
+        vl = Gtk.Label(label=("%dK · 越低越暖" % temp) if on else "已关闭")
+        vl.add_css_class("sub")
+        vl.set_xalign(0)
+        self.night_value = vl
+        self.panel.append(vl)
+
+        scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 2000, 6500, 100)
+        scale.set_draw_value(False)
+        scale.set_value(float(temp))
+        scale.set_size_request(PANEL_W - 40, -1)
+        scale.connect("value-changed", self._night_changed)
+        self.night_scale = scale
+        self.panel.append(scale)
+
+        for text, val in (("3000K · 暖黄", 3000), ("3800K · 柔和", 3800),
+                          ("4500K · 标准", 4500), ("5500K · 偏冷", 5500),
+                          ("6500K · 中性", 6500)):
+            b, _l, _i = self.make_row(text, "", lambda _w, v=val: self._night_preset(v))
+            self.panel.append(b)
+
+    def _night_changed_guard(self):
+        pass
+
+    # -- 蓝牙 --------------------------------------------------------------
+    def _bt_rebuild(self):
+        try:
+            while self.panel.get_first_child() is not None:
+                self.panel.remove(self.panel.get_first_child())
+        except Exception:
+            return False
+        self.build_bluetooth()
+        return False
+
+    def _on_bt_switch(self, _sw, state):
+        threading.Thread(target=lambda: (bt_power(state), GLib.idle_add(self._bt_rebuild)),
+                         daemon=True).start()
+        return False
+
+    def _bt_toggle(self, mac, connected):
+        threading.Thread(target=lambda: (bt_connect(mac, connected), GLib.idle_add(self._bt_rebuild)),
+                         daemon=True).start()
+
+    def _bt_scan(self):
+        def work():
+            run(["bluetoothctl", "--timeout", "8", "scan", "on"], timeout=15)
+            GLib.idle_add(self._bt_rebuild)
+        threading.Thread(target=work, daemon=True).start()
+
+    def build_bluetooth(self):
+        powered = bt_powered()
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        il = Gtk.Label(label="\uf293")
+        il.add_css_class("icon")
+        tl = Gtk.Label(label="蓝牙")
+        tl.add_css_class("title")
+        tl.set_xalign(0)
+        tl.set_hexpand(True)
+        sw = Gtk.Switch()
+        sw.set_active(powered)
+        sw.connect("state-set", self._on_bt_switch)
+        head.append(il)
+        head.append(tl)
+        head.append(sw)
+        self.panel.append(head)
+
+        sl = Gtk.Label(label="已开启" if powered else "已关闭")
+        sl.add_css_class("sub")
+        sl.set_xalign(0)
+        self.panel.append(sl)
+
+        if not powered:
+            b, _l, _i = self.make_row("打开蓝牙", "\uf293", lambda _w: self._bt_power_on())
+            self.panel.append(b)
+            return
+
+        devices = bt_devices()
+        if not devices:
+            l = Gtk.Label(label="没有已配对或已知设备")
+            l.add_css_class("sub")
+            l.set_xalign(0)
+            self.panel.append(l)
+        else:
+            for d in devices:
+                bits = [d["name"]]
+                if d["connected"]:
+                    bits.append("已连接")
+                if d.get("battery") is not None:
+                    bits.append("%d%%" % d["battery"])
+                text = "  · ".join(bits)
+                icon = bt_battery_icon(d.get("battery")) if d["connected"] else "\uf293"
+                btn, _l, _i = self.make_row(
+                    text, icon,
+                    lambda _w, mac=d["mac"], conn=d["connected"]: self._bt_toggle(mac, conn),
+                    active=d["connected"],
+                )
+                self.panel.append(btn)
+
+        self.panel.append(self.sep())
+        b, _l, _i = self.make_row("扫描新设备（约 8 秒）", "\uf002", lambda _w: self._bt_scan())
+        self.panel.append(b)
+        b, _l, _i = self.make_row("刷新列表", "\uf021", lambda _w: self._bt_rebuild())
+        self.panel.append(b)
+
+    def _bt_power_on(self):
+        bt_power(True)
+        self._bt_rebuild()
+
+    def _power_action(self, cmd):
+        self.close()
+        try:
+            subprocess.Popen(
+                cmd, env=hypr_env(),
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except Exception:
+            pass
+
     def build_network(self):
         wifi = wifi_enabled()
         ssid = current_ssid()
@@ -775,7 +1217,7 @@ def ensure_preload():
 def main():
     ensure_preload()
     mode = sys.argv[1] if len(sys.argv) > 1 else "volume"
-    if mode not in ("volume", "brightness", "network", "calendar"):
+    if mode not in ("volume", "brightness", "network", "calendar", "power", "bluetooth", "night", "keys"):
         mode = "volume"
 
     kill_existing()

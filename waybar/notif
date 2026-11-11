@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# waybar 通知计数（swaync）
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if ! pgrep -x swaync >/dev/null; then echo '{"text": ""}'; exit 0; fi
+n=$(swaync-client -c -sw 2>/dev/null)
+dnd=$(swaync-client -D -sw 2>/dev/null)
+case "$n" in ''|*[!0-9]*) n=0 ;; esac
+if [ "$n" -gt 99 ]; then
+  disp="99+"
+else
+  disp="$n"
+fi
+if [ "$n" -eq 0 ]; then
+  echo '{"text": "", "class": ""}'
+elif [ "$dnd" = "true" ]; then
+  echo "{\"text\": \" $disp\", \"class\": \"active dnd\"}"
+else
+  echo "{\"text\": \" $disp\", \"class\": \"active\"}"
+fi

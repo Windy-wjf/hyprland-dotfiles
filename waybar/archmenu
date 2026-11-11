@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # macOS-style "Arch menu" — click the Arch logo at the top-left of the waybar.
 set -u
-H="${HOME:?HOME must be set}"
+H="${HOME:-/home/wjf}"
 FZ="$H/.config/fuzzel/fuzzel.ini"
 
 # Toggle: clicking the Arch logo again closes an already-open menu.
