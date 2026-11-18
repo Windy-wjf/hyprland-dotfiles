@@ -2,7 +2,7 @@
 """waybar 天气模块：数据来自 wttr.in，10 分钟缓存，失败时回退旧数据。"""
 import json, os, sys, time, urllib.parse, urllib.request
 
-DEFAULT_CITY = "Shanghai"
+DEFAULT_CITY = ""  # 空 = 按 IP 自动定位（wttr.in 自动识别）
 CITY_FILE = "/home/wjf/.config/waybar/weather.city"
 CACHE = "/run/user/1000/waybar-weather.json"
 TTL = 600
