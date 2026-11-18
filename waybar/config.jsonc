@@ -133,7 +133,7 @@
     "return-type": "json",
     "tooltip": true,
     "format": "{text}",
-    "on-click": "setsid -f firefox https://wttr.in/Shanghai"
+    "on-click": "python3 /home/wjf/.config/waybar/weather-city-search.py"
   },
   "custom/traybell": {
     "exec": "bash /home/wjf/.config/waybar/traybell",
@@ -148,7 +148,7 @@
     "show-passive-items": true
   },
   "custom/archmenu": {
-    "format": "\uf303",
+    "format": "",
     "tooltip": false,
     "on-click": "python3 /home/wjf/.config/waybar/popup.py power"
   },
@@ -157,14 +157,14 @@
     "format-paused": "{status_icon} {title}",
     "max-length": 34,
     "player-icons": {
-      "default": "\uf001",
-      "firefox": "\ue745",
-      "mpv": "\uf04b",
-      "vlc": "\uf144",
-      "spotify": "\uf1bc"
+      "default": "",
+      "firefox": "",
+      "mpv": "",
+      "vlc": "",
+      "spotify": ""
     },
     "status-icons": {
-      "paused": "\uf04c"
+      "paused": ""
     },
     "tooltip-format": "{player} · {title}\n{artist} — {album}",
     "on-click": "playerctl play-pause",
@@ -172,10 +172,10 @@
     "on-scroll-down": "playerctl previous"
   },
   "bluetooth": {
-    "format": "\uf293 {controller_alias}",
-    "format-disabled": "\uf293 off",
-    "format-connected": "\uf293 {device_alias}",
-    "format-no-controller": "\uf293 n/a",
+    "format": " {controller_alias}",
+    "format-disabled": " off",
+    "format-connected": " {device_alias}",
+    "format-no-controller": " n/a",
     "tooltip-format": "{controller_alias}\n{device_enumerate}",
     "tooltip-format-connected": "{controller_alias}\n{device_enumerate}",
     "on-click": "python3 /home/wjf/.config/waybar/popup.py bluetooth",
@@ -184,14 +184,14 @@
   "disk": {
     "path": "/",
     "interval": 60,
-    "format": "\uf0a0 {percentage_used}%",
+    "format": " {percentage_used}%",
     "tooltip-format": "根分区\n已用 {used} / {total}\n剩余 {free}"
   },
   "custom/updates": {
     "exec": "python3 /home/wjf/.config/waybar/updates",
     "interval": 3600,
     "return-type": "json",
-    "format": "\uf019 {text}",
+    "format": " {text}",
     "tooltip": true,
     "on-click": "kitty -e bash -lc 'sudo pacman -Syu'"
   },
@@ -199,18 +199,18 @@
     "exec": "bash /home/wjf/.config/waybar/notif",
     "interval": 2,
     "return-type": "json",
-    "format": "\uf0f3{text}",
+    "format": "{text}",
     "tooltip": false,
     "on-click": "swaync-client -t -sw",
     "on-click-right": "swaync-client -d -sw"
   },
   "custom/screenshot": {
-    "format": "\uf030",
+    "format": "",
     "tooltip": false,
     "on-click": "bash /home/wjf/.config/waybar/screenshot"
   },
   "custom/clipboard": {
-    "format": "\uf0ea",
+    "format": "",
     "tooltip": false,
     "on-click": "bash /home/wjf/.config/waybar/clipmenu"
   },
@@ -218,7 +218,7 @@
     "exec": "bash /home/wjf/.config/waybar/night status",
     "interval": 2,
     "return-type": "json",
-    "format": "\uf186",
+    "format": "",
     "tooltip": true,
     "on-click": "python3 /home/wjf/.config/waybar/popup.py night",
     "on-scroll-up": "bash /home/wjf/.config/waybar/night adjust 100",

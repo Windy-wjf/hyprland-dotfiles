@@ -148,15 +148,17 @@ def update(force=False):
         else:
             log(f"设置壁纸失败 monitor={n} rc={rc} out={out!r} err={err!r}")
 
-    # 同步写回配置，hyprpaper 重启后仍是这张；monitor 行去掉 → 作用于所有显示器
+    # 同步写回配置（hyprpaper v0.8.5 要求 wallpaper 块首键必须是 monitor，
+    # 旧写法"去掉 monitor 行"会让 hyprpaper 重启时直接崩溃）；每个活动显示器一个块
     try:
-        txt = open(CONF).read()
-        new = re.sub(r"(?m)^\s*monitor\s*=.*\n?", "", txt)
-        new = re.sub(r"(?m)^(\s*path\s*=\s*).*$",
-                     lambda m: m.group(1) + path, new, count=1)
-        if new != txt:
-            with open(CONF, "w") as f:
-                f.write(new)
+        names = monitors() or [MONITOR]
+        blocks = "\n\n".join(
+            "wallpaper {\n    monitor  = %s\n    path     = %s\n    fit_mode = fill\n}" % (n, path)
+            for n in names
+        )
+        with open(CONF, "w") as f:
+            f.write("# hyprpaper 配置（bing-wallpaper 自动生成，勿手改）\n"
+                    + blocks + "\n\nsplash = false\nipc = true\n")
     except Exception as e:  # noqa: BLE001
         log(f"更新 hyprpaper.conf 失败：{e}")
 

@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""天气模块城市搜索：Rofi + Nominatim 在线地理编码。
+点击 waybar 天气模块时调用，搜索城市后写入 weather.city。"""
+import json
+import subprocess
+import sys
+import urllib.parse
+import urllib.request
+
+CITY_FILE = "/home/wjf/.config/waybar/weather.city"
+API = "https://geocoding-api.open-meteo.com/v1/search"
+
+
+def rofi_select(prompt, items, header=""):
+    """用 Rofi dmenu 选择，返回选中项或 None。items 为空时 Rofi 显示空白输入框。"""
+    lines = "\n".join(items) if isinstance(items, list) else (items or "")
+    cmd = ["rofi", "-dmenu", "-p", prompt, "-width", "40", "-lines", "10", "-location", "3", "-xoffset", "-300"]
+    if header:
+        cmd.extend(["-eh", header])
+    r = subprocess.run(
+        cmd,
+        input=lines, capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return None
+    return r.stdout.strip() or None
+
+
+def search_cities(query, limit=15):
+    """Open-Meteo geocoding 搜索，返回 (display, query_for_wttr) 列表。"""
+    params = urllib.parse.urlencode({
+        "name": query,
+        "count": str(limit),
+        "language": "zh",
+    })
+    url = f"{API}?{params}"
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "waybar-weather/1.0",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.load(resp)
+    except Exception:
+        return []
+
+    items = []
+    for r in data.get("results", []):
+        name = r.get("name", "")
+        admin = r.get("admin1", "")
+        display = f"{name} ({admin})" if admin else name
+        if name and name not in [x[1] for x in items]:
+            items.append((display, name))
+    return items
+
+
+def main():
+    # 第一步：输入搜索词（空列表，用户自由输入）
+    search = rofi_select("搜索城市:", "")
+    if not search:
+        return
+
+    # 第二步：在线搜索
+    results = search_cities(search)
+    if not results:
+        # 没有结果，直接尝试用输入的值
+        write_city(search)
+        return
+
+    # 第三步：选择结果
+    display_list = [f"{disp}  [{name}]" for disp, name in results]
+    chosen = rofi_select("选择城市:", display_list)
+    if not chosen:
+        return
+
+    # 提取 name 部分
+    if "[" in chosen and "]" in chosen:
+        city = chosen.split("[", 1)[1].split("]")[0].strip()
+    else:
+        city = chosen
+
+    write_city(city)
+
+
+def write_city(city):
+    """写入 weather.city 并刷新。"""
+    with open(CITY_FILE, "w", encoding="utf-8") as f:
+        f.write(f"# 天气地点：写城市名（中英文均可），留空或删除本文件则按 IP 自动定位\n{city}\n")
+    print(f"已设置天气城市: {city}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
