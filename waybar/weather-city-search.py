@@ -347,7 +347,6 @@ button.row {
     border-radius: 6px;
     padding: 6px 10px;
     font-size: 13px;
-    justify-content: start;
 }
 button.row:hover { background: rgba(80, 120, 180, 0.2); color: #fff; }
 .sep { background: rgba(100, 140, 200, 0.15); min-height: 1px; margin: 4px 0; }
@@ -356,7 +355,11 @@ button.row:hover { background: rgba(80, 120, 180, 0.2); color: #fff; }
 
 
 def main():
-    Gtk.init()
+    ok = Gtk.init_check()
+    if not ok:
+        print("错误：无法初始化 GTK 显示服务器（需要 Wayland 环境）", file=sys.stderr)
+        sys.exit(1)
+
     settings = Gtk.Settings.get_default()
     if settings:
         settings.set_property("gtk-application-prefer-dark-theme", True)
@@ -364,6 +367,9 @@ def main():
     provider = Gtk.CssProvider()
     provider.load_from_data(CSS.encode())
     display = Gdk.Display.get_default()
+    if not display:
+        print("错误：未找到 Wayland 显示服务器（WAYLAND_DISPLAY 未设置或 compositor 未运行）", file=sys.stderr)
+        sys.exit(1)
     Gtk.StyleContext.add_provider_for_display(
         display, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION, provider
     )
