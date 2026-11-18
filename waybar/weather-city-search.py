@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Waybar 天气城市搜索（GTK4 + gtk4-layer-shell）：风格与 popup.py 完全一致。"""
-import os
+"""Waybar 天气城市搜索（GTK4 + gtk4-layer-shell）：风格与 popup.py 一致。
+
+- 离线候选：主要城市 + 县级市/区
+- 在线搜索：Nominatim（无 countrycodes 限制）
+- 回车：直接将输入写入 weather.city（wttr.in 支持中文城市名）
+- 点击外部 / Esc 关闭
+"""
 import sys
+import json
 import threading
 import urllib.parse
 import urllib.request
@@ -14,58 +20,86 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
 from gi.repository import Gdk, GLib, Gtk, Gtk4LayerShell
 
-HOME = os.path.expanduser("~")
 MARGIN_TOP = 42
-PANEL_W = 320
-CITY_FILE = os.path.join(HOME, ".config", "waybar", "weather.city")
+PANEL_W = 340
+CITY_FILE = "/home/wjf/.config/waybar/weather.city"
 
-CSS = """
-window.popupwin, window.popupwin contents { background: transparent; }
-window.popupwin { font-family: "JetBrainsMono Nerd Font", monospace; }
-.panel {
-    background-color: rgba(20, 20, 30, 0.55);
-    border: none;
-    border-radius: 16px;
-    padding: 14px 16px;
-}
-.title { color: #e8e8d2; font-size: 13px; font-weight: bold; }
-.sub { color: #9aa0a0; font-size: 11px; }
-.rowtext { color: #e8e8e8; font-size: 12px; }
-.val { color: #58d8ff; font-size: 13px; font-weight: bold; }
-button.row {
-    background: transparent;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-    padding: 6px 8px;
-    border-radius: 8px;
-    min-height: 0;
-}
-button.row:hover { background-color: rgba(88, 216, 255, 0.1); }
-.searchbox {
-    background-color: rgba(40, 40, 55, 0.8);
-    border: 1px solid rgba(88, 216, 255, 0.3);
-    border-radius: 8px;
-    padding: 8px 10px;
-    color: #e8e8e8;
-    font-size: 13px;
-}
-.searchbox:focus { border-color: rgba(88, 216, 255, 0.7); }
-.sep { background-color: rgba(88, 216, 255, 0.15); min-height: 1px; }
-"""
-
+# 离线候选：(显示名, 写入 weather.city 的值)
+# wttr.in 支持中文和英文，这里用英文更稳定
 CITIES = [
-    ("北京", "Beijing"), ("上海", "Shanghai"), ("成都", "Chengdu"),
-    ("广州", "Guangzhou"), ("杭州", "Hangzhou"), ("深圳", "Shenzhen"),
-    ("南京", "Nanjing"), ("武汉", "Wuhan"), ("西安", "Xi'an"), ("重庆", "Chongqing"),
+    # 直辖市/省会
+    ("北京", "Beijing"), ("上海", "Shanghai"), ("广州", "Guangzhou"),
+    ("深圳", "Shenzhen"), ("成都", "Chengdu"), ("杭州", "Hangzhou"),
+    ("南京", "Nanjing"), ("武汉", "Wuhan"), ("西安", "Xian"),
+    ("重庆", "Chongqing"), ("天津", "Tianjin"), ("苏州", "Suzhou"),
+    ("长沙", "Changsha"), ("郑州", "Zhengzhou"), ("青岛", "Qingdao"),
+    ("大连", "Dalian"), ("沈阳", "Shenyang"), ("哈尔滨", "Harbin"),
+    ("昆明", "Kunming"), ("贵阳", "Guiyang"), ("南宁", "Nanning"),
+    ("海口", "Haikou"), ("福州", "Fuzhou"), ("厦门", "Xiamen"),
+    ("济南", "Jinan"), ("合肥", "Hefei"), ("太原", "Taiyuan"),
+    ("石家庄", "Shijiazhuang"), ("兰州", "Lanzhou"), ("银川", "Yinchuan"),
+    ("乌鲁木齐", "Urumqi"), ("拉萨", "Lhasa"), ("西宁", "Xining"),
+    ("呼和浩特", "Hohhot"), ("长春", "Changchun"), ("南昌", "Nanchang"),
+    ("宁波", "Ningbo"), ("无锡", "Wuxi"), ("佛山", "Foshan"),
+    ("东莞", "Dongguan"), ("珠海", "Zhuhai"), ("中山", "Zhongshan"),
+    ("惠州", "Huizhou"), ("江门", "Jiangmen"), ("烟台", "Yantai"),
+    ("潍坊", "Weifang"), ("泉州", "Quanzhou"), ("温州", "Wenzhou"),
+    ("台州", "Taizhou"), ("金华", "Jinhua"), ("嘉兴", "Jiaxing"),
+    ("绍兴", "Shaoxing"), ("湖州", "Huzhou"), ("常州", "Changzhou"),
+    ("徐州", "Xuzhou"), ("扬州", "Yangzhou"), ("南通", "Nantong"),
+    ("洛阳", "Luoyang"), ("襄阳", "Xiangyang"), ("宜昌", "Yichang"),
+    ("桂林", "Guilin"), ("柳州", "Liuzhou"), ("三亚", "Sanya"),
+    ("珠海", "Zhuhai"), ("湛江", "Zhanjiang"), ("汕头", "Shantou"),
+    ("珠海", "Zhuhai"), ("威海", "Weihai"), ("泰安", "Tai'an"),
+    ("临沂", "Linyi"), ("赣州", "Ganzhou"), ("遵义", "Zunyi"),
+    ("绵阳", "Mianyang"), ("德阳", "Deyang"), ("乐山", "Leshan"),
+    ("宜宾", "Yibin"), ("泸州", "Luzhou"), ("南充", "Nanchong"),
+    ("达州", "Dazhou"), ("内江", "Neijiang"), ("自贡", "Zigong"),
+    ("攀枝花", "Panzhihua"), ("六盘水", "Liupanshui"), ("毕节", "Bijie"),
+    ("曲靖", "Qujing"), ("大理", "Dali"), ("丽江", "Lijiang"),
+    ("延安", "Yan'an"), ("榆林", "Yulin"), ("渭南", "Weinan"),
+    ("宝鸡", "Baoji"), ("咸阳", "Xianyang"), ("汉中", "Hanzhong"),
+    ("商丘", "Shangqiu"), ("周口", "Zhoukou"), ("驻马店", "Zhumadian"),
+    ("信阳", "Xinyang"), ("南阳", "Nanyang"), ("开封", "Kaifeng"),
+    ("安阳", "Anyang"), ("新乡", "Xinxiang"), ("许昌", "Xuchang"),
+    ("芜湖", "Wuhu"), ("蚌埠", "Bengbu"), ("阜阳", "Fuyang"),
+    ("安庆", "Anqing"), ("马鞍山", "Maanshan"), ("铜陵", "Tongling"),
+    ("黄山", "Huangshan"), ("池州", "Chizhou"), ("宣城", "Xuancheng"),
+    ("九江", "Jiujiang"), ("上饶", "Shangrao"), ("宜春", "Yichun"),
+    ("景德镇", "Jingdezhen"), ("赣州", "Ganzhou"), ("吉安", "Ji'an"),
+    ("漳州", "Zhangzhou"), ("龙岩", "Longyan"), ("三明", "Sanming"),
+    ("莆田", "Putian"), ("宁德", "Ningde"), ("南平", "Nanping"),
+    ("柳州", "Liuzhou"), ("桂林", "Guilin"), ("北海", "Beihai"),
+    ("玉林", "Yulin"), ("百色", "Baise"), ("梧州", "Wuzhou"),
+    ("韶关", "Shaoguan"), ("清远", "Qingyuan"), ("梅州", "Meizhou"),
+    ("河源", "Heyuan"), ("阳江", "Yangjiang"), ("茂名", "Maoming"),
+    ("揭阳", "Jieyang"), ("潮州", "Chaozhou"), ("汕尾", "Shanwei"),
+    ("梅州", "Meizhou"), ("云浮", "Yunfu"),
+    # 区/县级示例
+    ("北京·海淀", "Haidian, Beijing"), ("北京·朝阳", "Chaoyang, Beijing"),
+    ("北京·西城", "Xicheng, Beijing"), ("北京·东城", "Dongcheng, Beijing"),
+    ("北京·丰台", "Fengtai, Beijing"), ("北京·通州", "Tongzhou, Beijing"),
+    ("上海·浦东", "Pudong, Shanghai"), ("上海·闵行", "Minhang, Shanghai"),
+    ("上海·徐汇", "Xuhui, Shanghai"), ("上海·静安", "Jing'an, Shanghai"),
+    ("上海·宝山", "Baoshan, Shanghai"), ("上海·嘉定", "Jiading, Shanghai"),
+    ("深圳·南山", "Nanshan, Shenzhen"), ("深圳·福田", "Futian, Shenzhen"),
+    ("深圳·宝安", "Bao'an, Shenzhen"), ("深圳·龙岗", "Longgang, Shenzhen"),
+    ("杭州·西湖", "West Lake, Hangzhou"), ("杭州·滨江", "Binjiang, Hangzhou"),
+    ("成都·武侯", "Wuhou, Chengdu"), ("成都·锦江", "Jinjiang, Chengdu"),
+    ("广州·天河", "Tianhe, Guangzhou"), ("广州·越秀", "Yuexiu, Guangzhou"),
+    ("广州·番禺", "Panyu, Guangzhou"), ("广州·花都", "Huadu, Guangzhou"),
+    ("南京·鼓楼", "Gulou, Nanjing"), ("南京·建邺", "Jianye, Nanjing"),
+    ("武汉·武昌", "Wuchang, Wuhan"), ("武汉·汉口", "Hankou, Wuhan"),
+    ("武汉·光谷", "Optics Valley, Wuhan"),
 ]
 
 
-def save_city(en_name):
+def save_city(value):
+    """写入 weather.city"""
     try:
         with open(CITY_FILE, "w") as f:
             f.write("# 天气地点：写城市名（中英文均可），留空或删除本文件则按 IP 自动定位\n")
-            f.write("%s\n" % en_name)
+            f.write("%s\n" % value)
     except OSError:
         pass
 
@@ -83,31 +117,32 @@ def refresh_weather():
         pass
 
 
-def search_nominatim(query, limit=8):
+def search_nominatim(query, limit=10):
+    """Nominatim 搜索，不加 countrycodes 限制"""
     try:
         url = (
             "https://nominatim.openstreetmap.org/search"
-            "?format=json&limit=%d&accept-language=zh&countrycodes=cn"
-            "&q=%s" % (limit, urllib.parse.quote(query))
+            "?format=jsonv2&limit=%d&accept-language=zh&"
+            "q=%s" % (limit, urllib.parse.quote(query))
         )
-        req = urllib.request.Request(url, headers={"User-Agent": "waybar-weather/1.0"})
-        with urllib.request.urlopen(req, timeout=6) as resp:
-            import json
-            results = json.loads(resp.read().decode())
-        out = []
-        for r in results:
-            name = r.get("display_name", "").split(",")[0]
-            out.append((name, r.get("lat", ""), r.get("lon", "")))
-        return out
-    except Exception:
-        return []
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "waybar-weather-popup/1.0 (personal use)",
+        })
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+        results = []
+        for d in data:
+            name = d.get("name") or d.get("display_name", "").split(",")[0]
+            # 用 display_name 作为写入值（wttr.in 能识别）
+            write_val = d.get("display_name", name)
+            results.append((name[:30], write_val))
+        return results
+    except Exception as e:
+        return [("搜索失败: %s" % type(e).__name__, "")]
 
 
 class WeatherCitySearch:
     def __init__(self):
-        self._results_box = None
-        self._entry = None
-
         self.win = Gtk.Window()
         self.win.add_css_class("popupwin")
         self.win.set_decorated(False)
@@ -137,22 +172,24 @@ class WeatherCitySearch:
         self.root.append(self.panel)
         self.win.set_child(self.root)
 
+        # 点击外部关闭
         click = Gtk.GestureClick()
         click.connect("pressed", self._on_press)
         self.root.add_controller(click)
 
+        # Esc 关闭
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", self._on_key)
         self.win.add_controller(keys)
 
         # 标题
-        title = Gtk.Label(label="搜索城市", halign=Gtk.Align.START)
+        title = Gtk.Label(label="🌤 搜索城市", halign=Gtk.Align.START)
         title.add_css_class("title")
         self.panel.append(title)
 
         # 搜索框
         self._entry = Gtk.Entry()
-        self._entry.set_placeholder_text("输入城市名…")
+        self._entry.set_placeholder_text("输入城市/区/县…")
         self._entry.add_css_class("searchbox")
         self._entry.connect("changed", self._on_search)
         self._entry.connect("activate", self._on_enter)
@@ -163,10 +200,21 @@ class WeatherCitySearch:
         sep.add_css_class("sep")
         self.panel.append(sep)
 
-        # 结果列表
-        self._results_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        # 结果列表（可滚动）
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_size_request(-1, 300)
+        self._list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        scroll.set_child(self._list)
+        self.panel.append(scroll)
+
+        # 提示
+        self._hint = Gtk.Label(label="↑↓ 选择 · 回车确认 · 也可直接输入后回车", halign=Gtk.Align.CENTER)
+        self._hint.add_css_class("sub")
+        self.panel.append(self._hint)
+
         self._show_local("")
-        self.panel.append(self._results_box)
+        self._entry.grab_focus()
 
     def _on_key(self, _controller, keyval, _keycode, _state):
         if keyval == Gdk.KEY_Escape:
@@ -179,25 +227,39 @@ class WeatherCitySearch:
         if x < alloc.x or x >= alloc.x + alloc.width:
             self._close()
 
-    def _show_local(self, query):
-        for child in self._results_box.get_children():
-            self._results_box.remove(child)
-        for zh, en in CITIES:
-            if query and query.lower() not in zh.lower() and query.lower() not in en.lower():
-                continue
-            self._add_row("%s  (%s)" % (zh, en), zh, en)
-        if not self._results_box.get_children():
-            lbl = Gtk.Label(label="无匹配，在线搜索中…", halign=Gtk.Align.START)
-            lbl.add_css_class("sub")
-            self._results_box.append(lbl)
+    def _clear_list(self):
+        for child in self._list.get_children():
+            self._list.remove(child)
 
-    def _add_row(self, text, zh, en):
-        btn = Gtk.Button(label=text)
+    def _add_row(self, display, write_val):
+        btn = Gtk.Button(label=display)
         btn.add_css_class("row")
         btn.set_halign(Gtk.Align.FILL)
         btn.set_hexpand(True)
-        btn.connect("clicked", lambda _b, z=zh, e=en: self._select(z, e))
-        self._results_box.append(btn)
+        btn.connect("clicked", lambda _b, v=write_val: self._select(v))
+        self._list.append(btn)
+
+    def _show_local(self, query):
+        self._clear_list()
+        matched = []
+        for display, val in CITIES:
+            if not query:
+                matched.append((display, val))
+            else:
+                q = query.lower()
+                if q in display.lower() or q in val.lower():
+                    matched.append((display, val))
+        if not matched:
+            lbl = Gtk.Label(label="无本地匹配，尝试在线搜索…", halign=Gtk.Align.CENTER)
+            lbl.add_css_class("sub")
+            self._list.append(lbl)
+        else:
+            for display, val in matched[:15]:
+                self._add_row(display, val)
+            if len(matched) > 15:
+                lbl = Gtk.Label(label="… 共 %d 个匹配" % len(matched), halign=Gtk.Align.CENTER)
+                lbl.add_css_class("sub")
+                self._list.append(lbl)
 
     def _on_search(self, entry):
         query = entry.get_text().strip()
@@ -206,29 +268,48 @@ class WeatherCitySearch:
             return
         # 先显示本地匹配
         self._show_local(query)
-        # 在线搜索（后台线程）
+        # 在线搜索（后台）
         threading.Thread(target=self._search_online, args=(query,), daemon=True).start()
 
     def _search_online(self, query):
         results = search_nominatim(query)
-        if results:
-            GLib.idle_add(self._show_online, results)
+        GLib.idle_add(self._show_online, results)
 
     def _show_online(self, results):
-        for child in self._results_box.get_children():
-            self._results_box.remove(child)
-        for name, lat, lon in results:
-            self._add_row(name, name, name)
+        # 如果只有错误信息
+        if len(results) == 1 and results[0][1] == "":
+            err_label = Gtk.Label(label=results[0][0], halign=Gtk.Align.CENTER)
+            err_label.add_css_class("sub")
+            self._list.append(err_label)
+            return False
+        # 追加在线结果
+        sep = Gtk.Box()
+        sep.add_css_class("sep")
+        self._list.append(sep)
+        hdr = Gtk.Label(label="在线结果:", halign=Gtk.Align.START)
+        hdr.add_css_class("sub")
+        self._list.append(hdr)
+        for display, val in results:
+            self._add_row(display, val)
         return False
 
     def _on_enter(self, _entry):
-        children = self._results_box.get_children()
+        """回车：优先选择第一个结果，否则直接写入输入内容"""
+        text = self._entry.get_text().strip()
+        if not text:
+            return
+        # 如果有列表项，选第一个
+        children = self._list.get_children()
         if children:
-            btn = children[0]
-            btn.emit("clicked")
+            first = children[0]
+            if isinstance(first, Gtk.Button):
+                first.emit("clicked")
+                return
+        # 没有匹配项 → 直接写入（wttr.in 可能识别）
+        self._select(text)
 
-    def _select(self, zh, en):
-        save_city(en)
+    def _select(self, write_val):
+        save_city(write_val)
         refresh_weather()
         self._close()
 
@@ -239,8 +320,42 @@ class WeatherCitySearch:
             loop.quit()
 
 
+CSS = """
+window.popupwin { background: transparent; }
+.panel {
+    background: rgba(30, 32, 38, 0.92);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+.title { font-size: 15px; font-weight: bold; color: #e8e8e8; }
+.searchbox {
+    background: rgba(50, 54, 62, 0.9);
+    color: #e8e8e8;
+    border: 1px solid rgba(100, 140, 200, 0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+}
+.searchbox:focus { border-color: rgba(100, 160, 220, 0.8); }
+.searchbox text { color: #e8e8e8; }
+.searchbox placeholder { color: #888; }
+button.row {
+    background: transparent;
+    color: #d0d8e0;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    justify-content: start;
+}
+button.row:hover { background: rgba(80, 120, 180, 0.2); color: #fff; }
+.sep { background: rgba(100, 140, 200, 0.15); min-height: 1px; margin: 4px 0; }
+.sub { color: #889; font-size: 11px; }
+"""
+
+
 def main():
-    mode = sys.argv[1] if len(sys.argv) > 1 else ""
     Gtk.init()
     settings = Gtk.Settings.get_default()
     if settings:
@@ -250,7 +365,7 @@ def main():
     provider.load_from_data(CSS.encode())
     display = Gdk.Display.get_default()
     Gtk.StyleContext.add_provider_for_display(
-        display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        display, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION, provider
     )
 
     pop = WeatherCitySearch()
