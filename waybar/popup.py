@@ -37,7 +37,7 @@ CSS = """
 window.popupwin, window.popupwin contents { background: transparent; }
 window.popupwin { font-family: "JetBrainsMono Nerd Font", monospace; }
 .panel {
-    background-color: rgba(20, 20, 30, 0.55);
+    background-color: rgba(20, 20, 30, 1);
     border: none;
     border-radius: 16px;
     padding: 14px 16px;

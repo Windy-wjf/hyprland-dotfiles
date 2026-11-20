@@ -28,6 +28,10 @@ tooltip label {
 
 /* ---- left ---------------------------------------------------------- */
 
+#window {
+    color: #21ccff;
+    padding: 0 11px;
+}
 
 #network,
 #memory,
@@ -41,6 +45,7 @@ tooltip label {
     padding: 0 11px;
 }
 
+#window.empty,
 #network.disconnected {
     color: #787882;
 }
@@ -93,18 +98,17 @@ tooltip label {
     background: rgba(33, 204, 255, 0.15);
 }
 
-/* ---- left: Arch 菜单按钮（点击弹出电源菜单） ---------------------- */
+/* ---- left: macOS-style Arch menu button ----------------------------- */
 #custom-archmenu {
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 9px;
-    margin: 4px 5px;
-    padding: 1px 13px 1px 9px;
     color: #e8e8ee;
-    font-size: 16px;
+    padding: 2px 9px;
+    font-size: 17px;
+    background: transparent;
+    border-radius: 6px;
 }
 #custom-archmenu:hover {
-    background: rgba(255, 255, 255, 0.16);
     color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
 }
 
 /* 系统托盘（QQ/微信等后台应用） */
@@ -137,11 +141,27 @@ tooltip label {
   color: rgba(255, 180, 60, 0.12);
 }
 
-/* ---- 右侧分组底色（区分：网络 / 系统占用 / 托盘 / 时间） ---------- */
+/* ---- 右侧分组底色（区分：网络+蓝牙 / 系统占用 / 托盘 / 时间） ---------- */
 #network {
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 9px;
-  margin: 4px 5px;
+  border-radius: 9px 0 0 9px;
+  margin: 4px 0;
+  margin-left: 5px;
+  padding: 0 10px;
+}
+#bluetooth,
+#custom-updates,
+#pulseaudio {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  margin: 4px 0;
+  padding: 0 10px;
+}
+#custom-brightness {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 0 9px 9px 0;
+  margin: 4px 0;
+  margin-right: 5px;
   padding: 0 10px;
 }
 
@@ -156,10 +176,6 @@ tooltip label {
 #memory {
   border-radius: 9px 0 0 9px;
   margin-left: 5px;
-}
-#custom-cpu {
-  border-radius: 0;
-  margin-right: 0;
 }
 #disk {
   border-radius: 0 9px 9px 0;
@@ -181,6 +197,37 @@ tooltip label {
 }
 
 /* ---- 左侧与中部底色 ------------------------------------------------ */
+#custom-archmenu {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  margin: 4px 5px;
+  padding: 1px 12px 3px 7px;
+}
+
+#custom-applauncher {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  margin: 4px 5px;
+  padding: 1px 9px 3px 9px;
+  font-size: 16px;
+  color: #e8e8ee;
+}
+
+#custom-applauncher:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+#custom-notif {
+  padding: 2px 8px;
+}
+
+#window {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  margin: 4px 5px;
+  padding: 0 12px;
+}
 
 #workspaces {
   background: rgba(255, 255, 255, 0.08);
@@ -189,21 +236,22 @@ tooltip label {
   padding: 0 4px;
 }
 
-/* ---- 音量 + 亮度：合并成一个胶囊 ------------------------------- */
-#pulseaudio,
-#custom-brightness {
+
+
+#custom-screenshot,
+#custom-clipboard,
+#custom-night,
+#tray {
   background: rgba(255, 255, 255, 0.08);
   margin: 4px 0;
   padding: 0 8px;
 }
-
-#pulseaudio {
+#custom-screenshot {
   border-radius: 9px 0 0 9px;
   margin-left: 5px;
   padding-left: 10px;
 }
-
-#custom-brightness {
+#tray {
   border-radius: 0 9px 9px 0;
   margin-right: 5px;
   padding-right: 10px;
@@ -331,37 +379,3 @@ tooltip label {
 #custom-weather.snow   { color: #bfe6ff; }
 #custom-weather.storm  { color: #c79bff; }
 #custom-weather.fog    { color: #9aa0aa; }
-
-/* ---- 左侧媒体 ------------------------------------------------------ */
-#mpris {
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 9px;
-  margin: 4px 5px;
-  padding: 0 10px;
-  color: #c8c8d2;
-}
-#mpris:hover { color: #21ccff; }
-
-/* ---- 蓝牙 / 磁盘 / 更新 / 通知 / 截图 / 剪贴板 / 夜间 --------------- */
-#bluetooth,
-#custom-updates,
-#custom-notif,
-#custom-screenshot,
-#custom-clipboard,
-#custom-night {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 9px;
-  margin: 4px 3px;
-  padding: 0 9px;
-}
-#bluetooth { color: #9aa0aa; }
-#custom-updates.pending { color: #ffb43c; }
-#custom-notif { color: #8a8f99; padding: 0 10px 0 8px; }
-#custom-notif.active { color: #21ccff; }
-#custom-notif.active.dnd { color: #9aa0aa; }
-#custom-night { color: #8a8f99; }
-#custom-night.on { color: #ffb43c; }
-#bluetooth:hover,
-#custom-screenshot:hover,
-#custom-clipboard:hover,
-#custom-night:hover { color: #ffffff; }

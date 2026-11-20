@@ -228,8 +228,11 @@ class WeatherCitySearch:
             self._close()
 
     def _clear_list(self):
-        for child in self._list.get_children():
+        child = self._list.get_first_child()
+        while child is not None:
+            nxt = child.get_next_sibling()
             self._list.remove(child)
+            child = nxt
 
     def _add_row(self, display, write_val):
         btn = Gtk.Button(label=display)
@@ -323,7 +326,7 @@ class WeatherCitySearch:
 CSS = """
 window.popupwin { background: transparent; }
 .panel {
-    background: rgba(30, 32, 38, 0.92);
+    background: rgba(30, 32, 38, 1);
     border-radius: 12px;
     padding: 16px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
@@ -355,8 +358,9 @@ button.row:hover { background: rgba(80, 120, 180, 0.2); color: #fff; }
 
 
 def main():
-    ok = Gtk.init_check()
-    if not ok:
+    try:
+        Gtk.init()
+    except Exception:
         print("错误：无法初始化 GTK 显示服务器（需要 Wayland 环境）", file=sys.stderr)
         sys.exit(1)
 
@@ -367,11 +371,8 @@ def main():
     provider = Gtk.CssProvider()
     provider.load_from_data(CSS.encode())
     display = Gdk.Display.get_default()
-    if not display:
-        print("错误：未找到 Wayland 显示服务器（WAYLAND_DISPLAY 未设置或 compositor 未运行）", file=sys.stderr)
-        sys.exit(1)
     Gtk.StyleContext.add_provider_for_display(
-        display, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION, provider
+        display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
     )
 
     pop = WeatherCitySearch()
