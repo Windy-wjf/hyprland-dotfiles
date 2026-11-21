@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # macOS-style "Arch menu" — click the Arch logo at the top-left of the waybar.
 set -u
-H="${HOME:-/home/wjf}"
+H="$HOME"
 FZ="$H/.config/fuzzel/fuzzel.ini"
+# 没自带 fuzzel.ini 时退回 fuzzel 默认样式，菜单仍然可用
+[[ -f "$FZ" ]] || FZ=""
 
 # Toggle: clicking the Arch logo again closes an already-open menu.
 if pgrep -x fuzzel >/dev/null 2>&1; then
@@ -22,14 +24,14 @@ MENU=(
   "Log Out"
 )
 
-sel="$(printf '%s\n' "${MENU[@]}" | fuzzel --config "$FZ" --dmenu \
+sel="$(printf '%s\n' "${MENU[@]}" | fuzzel ${FZ:+--config "$FZ"} --dmenu \
   --anchor=top-left --x-margin=4 --y-margin=4 \
   --width=22 --lines=9 --minimal-lines --hide-prompt 2>/dev/null)" || exit 0
 
 bg() { "$@" >/dev/null 2>&1 & }
 
 case "$sel" in
-  "Applications")    bg fuzzel --config "$FZ" ;;
+  "Applications")    bg fuzzel ${FZ:+--config "$FZ"} ;;
   "System Settings") bg gnome-control-center ;;
   "Sleep")           bg systemctl suspend ;;
   "Restart")         bg systemctl reboot ;;

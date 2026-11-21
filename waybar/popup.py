@@ -1201,15 +1201,39 @@ def kill_existing():
         pass
 
 
+def _layer_shell_lib():
+    """找到 libgtk4-layer-shell 的实际路径（发行版布局不同）。"""
+    try:
+        import ctypes.util
+        name = ctypes.util.find_library("gtk4-layer-shell")
+        if name:
+            for d in os.environ.get("LD_LIBRARY_PATH", "").split(":") + [""]:
+                cand = os.path.join(d, name) if d else name
+                if os.path.exists(cand):
+                    return cand
+            return name
+    except Exception:
+        pass
+    for d in ("/usr/lib", "/usr/lib64", "/usr/local/lib",
+              "/usr/lib/x86_64-linux-gnu", "/usr/lib/aarch64-linux-gnu"):
+        cand = os.path.join(d, "libgtk4-layer-shell.so")
+        if os.path.exists(cand):
+            return cand
+    return None
+
+
 def ensure_preload():
     """gtk4-layer-shell 必须先于 libwayland 载入，否则 layer 表面初始化失败。"""
     if os.environ.get("WAYBAR_POPUP_REEXEC") == "1":
         return
-    if "libgtk4-layer-shell.so" in os.environ.get("LD_PRELOAD", ""):
+    if "libgtk4-layer-shell" in os.environ.get("LD_PRELOAD", ""):
         return
+    lib = _layer_shell_lib()
+    if not lib:
+        return  # 系统里没有就先按普通 GTK 窗口跑，别把 popup 弄挂
     env = dict(os.environ)
     old = env.get("LD_PRELOAD", "")
-    env["LD_PRELOAD"] = "/usr/lib/libgtk4-layer-shell.so" + ((" " + old) if old else "")
+    env["LD_PRELOAD"] = lib + ((" " + old) if old else "")
     env["WAYBAR_POPUP_REEXEC"] = "1"
     os.execve(sys.executable, [sys.executable, os.path.realpath(__file__)] + sys.argv[1:], env)
 

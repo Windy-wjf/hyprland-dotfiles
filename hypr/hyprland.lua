@@ -67,7 +67,7 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("sh -c 'pgrep -f \"^wl-paste --type text --watch cliphist store\" >/dev/null || setsid wl-paste --type text --watch cliphist store >/dev/null 2>&1'")
     hl.exec_cmd("sh -c 'pgrep -f \"^wl-paste --type image --watch cliphist store\" >/dev/null || setsid wl-paste --type image --watch cliphist store >/dev/null 2>&1'")
   hl.exec_cmd("sh -c 'sleep 2; pgrep -x hypridle >/dev/null || setsid hypridle >/tmp/hypridle.log 2>&1'")
-  hl.exec_cmd("sh -c 'pgrep -x hyprpolkitagent >/dev/null || setsid /usr/lib/hyprpolkitagent/hyprpolkitagent >/tmp/polkit.log 2>&1'")
+  hl.exec_cmd("sh -c 'pgrep -x hyprpolkitagent >/dev/null || setsid $(command -v hyprpolkitagent || echo /usr/lib/hyprpolkitagent/hyprpolkitagent) >/tmp/polkit.log 2>&1'")
 end)
 
 

@@ -3,8 +3,10 @@
 import json, os, sys, time, urllib.parse, urllib.request
 
 DEFAULT_CITY = ""  # 空 = 按 IP 自动定位（wttr.in 自动识别）
-CITY_FILE = "/home/wjf/.config/waybar/weather.city"
-CACHE = "/run/user/1000/waybar-weather.json"
+_HERE = os.path.dirname(os.path.abspath(__file__))
+CITY_FILE = os.path.join(_HERE, "weather.city")
+CACHE = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid(),
+                     "waybar-weather.json")
 TTL = 600
 
 
